@@ -1,0 +1,926 @@
+<!-- test --><!-- 1789508328 --><html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Тарифы междугородние</title>
+    <link rel="shortcut icon" href="/favicon.ico"/>
+    <link rel="stylesheet" href="/dist/css/menu.css?v=7">
+    <link rel="stylesheet" href="/dist/css/top_menu.css?v=8">
+    <link rel="stylesheet" href="/dist/css/semantic.min.css">
+    <link rel="stylesheet" href="/dist/css/main.css?v=7">
+    
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js" type="text/javascript"
+            charset="utf-8"></script>
+    <link rel="stylesheet" href="/dist/css/odometer.css?v=7"/>
+    <script src="/dist/js/jquery-scrollto.js?v=7"></script>
+    <script src="/dist/js/odometer.js?v=7"></script>
+    <script src="/dist/js/semantic.min.js"></script>
+    <script src="/dist/js/main.js?v=9"></script>
+  <!-- Yandex.Metrika counter --> <script type="text/javascript" > (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)}; m[i].l=1*new Date();k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)}) (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym"); ym(39443185, "init", { clickmap:true, trackLinks:true, accurateTrackBounce:true, webvisor:true, trackHash:true }); </script> <noscript><div><img src="https://mc.yandex.ru/watch/39443185" style="position:absolute; left:-9999px;" alt="" /></div></noscript> <!-- /Yandex.Metrika counter -->  <script src="/dist/js/classie.js?v=7"></script>
+    <script src="/dist/js/parallax.min.js?v=7"></script>
+    <style>
+        @media screen and (max-width: 1023px) {
+            .umbrella_button, .snow_footer {
+                display: none !important;
+            }
+        }
+
+        .main_dimmer {
+            height: 100vh !important;
+            width: 100vw !important;
+            left: 0 !important;
+            position: fixed !important;
+            top: 0 !important;
+        }
+
+                .st-menu, .st-pusher {
+            background-color: rgba(253, 126, 20, 0.85) !important;
+        }
+
+                .main_dimmer {
+            background-color: rgba(253, 126, 20, 1) !important;
+        }
+
+        #snow {
+            pointer-events: none;
+            position: fixed;
+            top: 0;
+            left: -10vw;
+            z-index: 100;
+        }
+
+        .st-content {
+            background-image: url(/dist/img/bg7.jpg);
+            background-repeat: no-repeat;
+            background-size: cover;
+        }
+
+        #mainTable .ui.table th {
+            padding: 10px 5px;
+        }
+
+        .logo_1D._bottom_2g, .chatCopyright_3s.__chat_35 {
+            display: none;
+        }
+
+
+    </style>
+</head>
+<body style="max-width: 100vw;max-height: 100vh;overflow: hidden">
+<div id="st-container" class="st-container">
+    <nav class="st-menu st-effect-11" id="menu-11">
+        <h2>Меню</h2>
+        <ul>
+            <li><a href="/"><i class="icon calculator"></i>Калькулятор</a></li>
+            <li><a href="/prices"><i class="icon ruble"></i>Тарифы</a></li>
+            <li><a href="/autsorsing_logistiki"><i class="icon dropbox"></i>Складские услуги</a></li>
+            <li><a href="/filials"><i class="icon map"></i>Филиалы</a></li>
+            <li><a href="/contacts"><i class="icon phone"></i>Контакты</a></li>
+            <li><a href="/documents"><i class="icon file excel outline"></i>Документы</a></li>
+            <li><a href="/epd/"><i class="icon file outline"></i>Гайд по ЭПД</a></li>
+            <li><a href="/about"><i class="icon info"></i> О нас</a></li>
+        </ul>
+    </nav>
+
+    <div class="st-content"><!-- this is the wrapper for the content -->
+        <div class="st-content-inner"><!-- extra div for emulating position:fixed of the menu -->
+
+            <div class="st-pusher" style="max-width: 100vw;overflow: hidden">
+                <div class="wrapper" style="max-width: 1024px;margin: auto;">
+                    <div class="ui modal waybill_info small">
+  <i class="close icon"></i>
+  <div class="header">
+    Отслеживание перевозки грузов
+  </div>
+  <div class="content">
+    <div class="ui form">
+      <div class="fields">
+        <div class="field">
+          <label style="color: rgba(0,0,0,.87)">Номер накладной</label>
+          <input onchange="WaybillInfo.request()" name="waybill" placeholder="С000012345678">
+        </div>
+        <div class="field">
+          <label>Найти</label>
+          <div onclick="WaybillInfo.request()" class="ui button teal">Найти</div>
+        </div>
+      </div>
+      <div class="ui error message">
+        <p></p>
+      </div>
+    </div>
+    <div class="info"></div>
+  </div>
+</div>
+<script>
+    var WaybillInfo = {
+        btn: $('.waybill_info .button'),
+        errorBlock: $('.waybill_info .error.message'),
+        infoBlock: $('.waybill_info .info'),
+        input: $('.waybill_info input'),
+        request() {
+            if (this.btn.hasClass('loading')) return;
+            this.btn.addClass('loading')
+            this.errorBlock.removeClass('visible');
+            this.infoBlock.fadeOut(0);
+            let number = this.input.val();
+            let url = `https://ctsp.cts-group.ru/waybillInfo?number=${number}`;
+            $.ajax({
+                url: url,
+                type: "POST",
+                success(data) {
+                    WaybillInfo.btn.removeClass('loading')
+                    if (!data.success) return WaybillInfo.error(data.error);
+                    else WaybillInfo.infoBlock.html(WaybillInfo.render(data.response)).fadeIn(300);
+                    $('.waybill_info').modal('refresh');
+                },
+                error() {
+                    WaybillInfo.btn.removeClass('loading')
+                    WaybillInfo.error('Не удалось загрузить информация, попробуйте позже.')
+                    $('.waybill_info').modal('refresh');
+                }
+            });
+        },
+        error(message) {
+            this.errorBlock.find('p').html(message);
+            this.errorBlock.addClass('visible');
+        },
+        render(data) {
+            let steps = '';
+            data.steps.forEach(step => {
+                steps += `<div class="${step.class} step">
+          <i class="${step.icon} icon"></i>
+          <div class="content">
+            <div class="title">${step.title}</div>
+            <div ${step.date_visible ? 'style="color: rgba(0,0,0,.87);"' : ''} class="description">${step.date}</div>
+          </div>
+        </div>`
+            })
+            return `<div class="ui message" style="color: rgba(0,0,0,.87) !important;">
+        <div class="header">
+          Маршрут следования
+        </div>
+        <p style="text-transform: capitalize">${data.city_from} - ${data.city_to}</p>
+        <p>Мест: ${data.items}, Вес: ${data.weight} кг, Объём: ${data.volume} м<sup>3</sup></p>
+      </div>
+      <div class="ui steps vertical">
+        ${steps}
+      </div>`;
+        }
+    }
+    $('.waybill_info').modal({
+        onHidden: () => {
+            WaybillInfo.errorBlock.removeClass('visible');
+            WaybillInfo.infoBlock.fadeOut(0);
+            WaybillInfo.input.val('');
+        }
+    });
+</script>
+<div class="ui modal phone_back">
+  <i class="close icon"></i>
+
+  <div class="header">
+    Оставьте свой номер и мы Вам перезвоним
+  </div>
+  <div class="image content">
+    <form class="ui form" style="width: 80%" id="orderphone">
+      <div class="field">
+        <label>Номер телефона</label>
+          <input type="hidden" name="page" value="Аутсорсинг логистики"/>
+        <div class="ui labeled input">
+          <div class="ui label">
+            +7
+          </div>
+          <input maxlength="10" onkeypress='return event.charCode >= 48 && event.charCode <= 57'
+                  name="phone" type="tel" placeholder="(xxx) xxx - xx - xx">
+        </div>
+      </div>
+      <div class="field">
+        <label>Дополнительно</label>
+        <textarea
+          placeholder="Укажите здесь дополнительную информацию (Добавочный номер, удобное время для звонка и т.д.)"
+          rows="3" name="text" style=""></textarea>
+      </div>
+      <button class="ui basic button submit">
+        <i class="phone icon"></i>
+        Заказать
+      </button>
+        <p style="color: rgba(0,0,0,.6)">Нажимая заказать, вы даёте согласие на <a href="/doc/agreement_cts.pdf" target="_blank">обработку персональных данных</a></p>
+      <div class="ui error message"></div>
+    </form>
+  </div>
+
+</div>
+<div class="ui basic modal order_contacts">
+  <i class="close icon"></i>
+
+  <div class="header">
+    Контактные данные
+  </div>
+  <div class="image content">
+    <form class="ui form" style="width: 80%">
+      <div class="field">
+        <div class="two fields">
+          <div class="field">
+            <label>Номер телефона</label>
+            <input type="tel" name="phone" placeholder="Номер телефона">
+          </div>
+          <div class="field">
+            <label>Почта</label>
+            <input type="text" name="email" placeholder="Почта">
+          </div>
+        </div>
+        <div class="field">
+          <label>Дополнительно</label>
+          <textarea
+            placeholder="Укажите здесь дополнительную информацию (Добавочный номер, удобное время для звонка и т.д.)"
+            rows="2" name="text"></textarea>
+        </div>
+      </div>
+    </form>
+  </div>
+  <div class="actions">
+    <div class="ui basic inverted button" onclick="create_order();">
+      <i class="dropbox icon"></i>
+      Заказать
+    </div>
+  </div>
+</div>
+
+<div class="ui basic modal sbor">
+  <i class="close icon"></i>
+
+  <div class="header">
+    <span>Заказ сбора груза</span>
+  </div>
+  <div class="image content">
+    <form class="ui form" style="width: 80%" id="ordersbor">
+      <div class="field">
+        <div class="two fields">
+          <div class="field">
+            <label>Город сбора</label>
+
+            <div class="ui fluid search selection dropdown" style="float: left; ">
+              <input type="hidden" name="city">
+              <i class="dropdown icon"></i>
+
+              <div class="default text">Город сбора</div>
+              <div class="menu">
+                                      <div class="item" data-value="1">Москва</div>                    <div class="item" data-value="2">Санкт-Петербург</div>                    <div class="item" data-value="3">Великий Новгород</div>                    <div class="item" data-value="4">Волгоград</div>                    <div class="item" data-value="5">Екатеринбург</div>                    <div class="item" data-value="6">Иркутск</div>                    <div class="item" data-value="7">Казань</div>                    <div class="item" data-value="8">Калининград</div>                    <div class="item" data-value="9">Краснодар</div>                    <div class="item" data-value="11">Мурманск</div>                    <div class="item" data-value="12">Оренбург</div>                    <div class="item" data-value="13">Псков</div>                    <div class="item" data-value="14">Самара</div>                    <div class="item" data-value="15">Советский</div>                    <div class="item" data-value="16">Тверь</div>                    <div class="item" data-value="17">Уфа</div>                    <div class="item" data-value="19">Великие Луки</div>                    <div class="item" data-value="20">Новосибирск</div>                    <div class="item" data-value="21">Омск</div>                    <div class="item" data-value="22">Сочи</div>                    <div class="item" data-value="23">Кемерово</div>                    <div class="item" data-value="24">Тюмень</div>                    <div class="item" data-value="26">Ростов-на-Дону</div>                    <div class="item" data-value="27">Тольятти</div>                    <div class="item" data-value="31">Анапа</div>                    <div class="item" data-value="33">Ангарск</div>                    <div class="item" data-value="35">Армавир</div>                    <div class="item" data-value="38">Архангельск</div>                    <div class="item" data-value="39">Астрахань</div>                    <div class="item" data-value="41">Ачинск</div>                    <div class="item" data-value="42">Балаково</div>                    <div class="item" data-value="46">Белгород</div>                    <div class="item" data-value="51">Бийск</div>                    <div class="item" data-value="52">Биробиджан</div>                    <div class="item" data-value="53">Благовещенск</div>                    <div class="item" data-value="54">Братск</div>                    <div class="item" data-value="55">Брянск</div>                    <div class="item" data-value="56">Бугульма</div>                    <div class="item" data-value="63">Владивосток</div>                    <div class="item" data-value="64">Владикавказ</div>                    <div class="item" data-value="65">Владимир</div>                    <div class="item" data-value="67">Волжский</div>                    <div class="item" data-value="68">Вологда</div>                    <div class="item" data-value="69">Воркута</div>                    <div class="item" data-value="70">Воронеж</div>                    <div class="item" data-value="74">Геленджик</div>                    <div class="item" data-value="75">Глазов</div>                    <div class="item" data-value="78">Димитровград</div>                    <div class="item" data-value="81">Елец</div>                    <div class="item" data-value="86">Златоуст</div>                    <div class="item" data-value="87">Иваново</div>                    <div class="item" data-value="88">Ижевск</div>                    <div class="item" data-value="90">Йошкар - Ола</div>                    <div class="item" data-value="91">Калуга</div>                    <div class="item" data-value="100">Кинешма</div>                    <div class="item" data-value="101">Киров</div>                    <div class="item" data-value="104">Когалым</div>                    <div class="item" data-value="105">Комсомольск на Амуре</div>                    <div class="item" data-value="109">Кострома</div>                    <div class="item" data-value="112">Кузнецк</div>                    <div class="item" data-value="116">Курган</div>                    <div class="item" data-value="117">Курск</div>                    <div class="item" data-value="118">Кызыл</div>                    <div class="item" data-value="119">Лабытнанги</div>                    <div class="item" data-value="122">Липецк</div>                    <div class="item" data-value="124">Магнитогорск</div>                    <div class="item" data-value="125">Майкоп</div>                    <div class="item" data-value="126">Махачкала</div>                    <div class="item" data-value="129">Миасс</div>                    <div class="item" data-value="139">Набережные Челны</div>                    <div class="item" data-value="141">Нальчик</div>                    <div class="item" data-value="142">Находка</div>                    <div class="item" data-value="145">Нерюнгри</div>                    <div class="item" data-value="146">Нижневартовск</div>                    <div class="item" data-value="147">Нижний Новгород</div>                    <div class="item" data-value="148">Нижний Тагил</div>                    <div class="item" data-value="150">Новокузнецк</div>                    <div class="item" data-value="151">Новороссийск</div>                    <div class="item" data-value="154">Новый Уренгой</div>                    <div class="item" data-value="155">Ноябрьск</div>                    <div class="item" data-value="156">Нягань</div>                    <div class="item" data-value="161">Орел</div>                    <div class="item" data-value="162">Орск</div>                    <div class="item" data-value="164">Пенза</div>                    <div class="item" data-value="166">Пермь</div>                    <div class="item" data-value="167">Петрозаводск</div>                    <div class="item" data-value="168">Петропавловск-Камчатский</div>                    <div class="item" data-value="169">Печора</div>                    <div class="item" data-value="173">Пятигорск</div>                    <div class="item" data-value="179">Рыбинск</div>                    <div class="item" data-value="180">Рязань</div>                    <div class="item" data-value="181">Салават</div>                    <div class="item" data-value="182">Саранск</div>                    <div class="item" data-value="183">Сарапул</div>                    <div class="item" data-value="184">Саратов</div>                    <div class="item" data-value="186">Северобайкальск</div>                    <div class="item" data-value="187">Северодвинск</div>                    <div class="item" data-value="188">Соликамск</div>                    <div class="item" data-value="192">Смоленск</div>                    <div class="item" data-value="195">Ставрополь</div>                    <div class="item" data-value="196">Старый Оскол</div>                    <div class="item" data-value="197">Стерлитамак</div>                    <div class="item" data-value="198">Сургут</div>                    <div class="item" data-value="199">Сызрань</div>                    <div class="item" data-value="200">Сыктывкар</div>                    <div class="item" data-value="202">Таганрог</div>                    <div class="item" data-value="204">Тамбов</div>                    <div class="item" data-value="209">Томск</div>                    <div class="item" data-value="211">Тула</div>                    <div class="item" data-value="212">Тында</div>                    <div class="item" data-value="215">Улан-Удэ</div>                    <div class="item" data-value="216">Ульяновск</div>                    <div class="item" data-value="217">Усинск</div>                    <div class="item" data-value="219">Уссурийск</div>                    <div class="item" data-value="222">Ухта</div>                    <div class="item" data-value="223">Хабаровск</div>                    <div class="item" data-value="224">Ханты-Мансийск</div>                    <div class="item" data-value="225">Чебоксары</div>                    <div class="item" data-value="226">Челябинск</div>                    <div class="item" data-value="227">Череповец</div>                    <div class="item" data-value="229">Чита</div>                    <div class="item" data-value="231">Шахты</div>                    <div class="item" data-value="233">Элиста</div>                    <div class="item" data-value="234">Южно-Сахалинск</div>                    <div class="item" data-value="235">Якутск</div>                    <div class="item" data-value="238">Ярославль</div>                    <div class="item" data-value="239">Абакан</div>                    <div class="item" data-value="240">Буденовск</div>                    <div class="item" data-value="241">Иркутск (ж/д)</div>                    <div class="item" data-value="242">Барнаул</div>                    <div class="item" data-value="243">Севастополь</div>                    <div class="item" data-value="244">Красноярск (ж/д)</div>                    <div class="item" data-value="248">Урай</div>                    <div class="item" data-value="249">Симферополь</div>                    <div class="item" data-value="250">Атырау</div>                    <div class="item" data-value="251">Дербент</div>                    <div class="item" data-value="252">Нефтеюганск</div>                    <div class="item" data-value="253">Хасавюрт</div>                    <div class="item" data-value="254">Ялта</div>                    <div class="item" data-value="255">Феодосия</div>                    <div class="item" data-value="256">Керчь</div>              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Номер телефона для связи</label>
+
+            <div class="ui labeled input">
+              <div class="ui label">
+                +7
+              </div>
+              <input type="tel" maxlength="10"
+                     onkeypress='return event.charCode >= 48 && event.charCode <= 57' name="phone"
+                     placeholder="Номер телефона">
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Дополнительно</label>
+          <textarea
+            placeholder="Укажите здесь дополнительную информацию (Добавочный номер, удобное время для звонка и т.д.)"
+            rows="3" name="text"></textarea>
+        </div>
+      </div>
+      <button class="ui basic inverted button">
+        <i class="dropbox icon"></i>
+        Заказать
+      </button>
+      <div class="ui error message"></div>
+    </form>
+  </div>
+
+</div>
+
+<div class="ui modal modal_success">
+  <i class="close icon"></i>
+
+  <div class="header">
+    <i class="checkmark icon"></i><span>Заказ звонка</span>
+  </div>
+  <div class="actions">
+    <div class="ui buttons">
+      <div class="ui teal button" onclick="$('.modal_success').modal('hide')">
+        Хорошо
+      </div>
+    </div>
+  </div>
+</div>                    <!--                        -->                    <div class="ui top menu _top_menu" style="background: transparent;">
+                        <a href="/" class="header item _logo">
+                            CTS Group
+                        </a>
+
+                        <div class="ui item">
+                            <button class="ui active basic button" style="padding:.71428571em 0"
+                                    data-effect="st-effect-11"
+                                    id="left-menu-trigger">
+                                <i class="icon bars"></i>
+                                Меню
+                            </button>
+                        </div>
+
+
+                        <div class="ui item">
+
+                            <div class="ui fluid search selection dropdown" id="top_dropdown"
+                                 style="border: 1px solid white;background: none !important;color:white;width: 180px;">
+                                <input type="hidden">
+                                <i class="dropdown icon"></i>
+
+                                <div class="default text">Город</div>
+                                <div class="menu">
+                                                                            <div class="item"
+                                             data-value="1">Москва</div>                                        <div class="item"
+                                             data-value="2">Санкт-Петербург</div>                                        <div class="item"
+                                             data-value="19">Великие Луки</div>                                        <div class="item"
+                                             data-value="3">Великий Новгород</div>                                        <div class="item"
+                                             data-value="5">Екатеринбург</div>                                        <div class="item"
+                                             data-value="88">Ижевск</div>                                        <div class="item"
+                                             data-value="7">Казань</div>                                        <div class="item"
+                                             data-value="8">Калининград</div>                                        <div class="item"
+                                             data-value="257">Калининград (паром)</div>                                        <div class="item"
+                                             data-value="256">Керчь</div>                                        <div class="item"
+                                             data-value="9">Краснодар</div>                                        <div class="item"
+                                             data-value="124">Магнитогорск</div>                                        <div class="item"
+                                             data-value="11">Мурманск</div>                                        <div class="item"
+                                             data-value="12">Оренбург</div>                                        <div class="item"
+                                             data-value="166">Пермь</div>                                        <div class="item"
+                                             data-value="13">Псков</div>                                        <div class="item"
+                                             data-value="26">Ростов-на-Дону</div>                                        <div class="item"
+                                             data-value="14">Самара</div>                                        <div class="item"
+                                             data-value="243">Севастополь</div>                                        <div class="item"
+                                             data-value="249">Симферополь</div>                                        <div class="item"
+                                             data-value="16">Тверь</div>                                        <div class="item"
+                                             data-value="17">Уфа</div>                                        <div class="item"
+                                             data-value="255">Феодосия</div>                                        <div class="item"
+                                             data-value="254">Ялта</div>                                </div>
+                            </div>
+                        </div>
+                        <div class="right menu">
+                            <div class="ui item">
+                                <table class="table menu_table"
+                                       style="color:white;background: transparent;border: none">
+                                    <tbody>
+                                    <tr>
+                                        <td><i class="mail icon"></i></td>
+                                        <td><a class="a_white" style="margin-left: 5px;" target="_blank"
+                                               href="mailto:info@cts-group.ru">info@cts-group.ru</a>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="phone icon"></i></td>
+                                        <td style="color:white !important;">8 (495) 23-12345</td>
+                                    </tr>
+                                    <tr>
+                                        <td><i class="phone icon"></i></td>
+                                        <td><a style="color:white !important;" href="tel:+78003004911">8 (800) 30-04-911 бесплатно по России</a></td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+
+                            <div class="ui item">
+                                <div class="ui buttons">
+                                    <!--                                    <button class="ui inverted button"-->
+                                    <!--                                            onclick="$('.ui.basic.modal.phone_back').modal('show');">-->
+                                    <!--                                        <i class="phone icon"></i>-->
+                                    <!--                                        Заказать звонок-->
+                                    <!--                                    </button>-->
+                                    <!--                                    <div class="or" data-text=""></div>-->
+                                    <a class="ui inverted button" href="/sbor">
+                                        <i class="truck icon"></i>
+                                        Заказать сбор
+                                    </a>
+                                </div>
+                            </div>
+                                                    </div>
+                    </div>
+
+                    <div class="ui segment inverted _main_segment">
+                        <!--                        <div class="ui active inverted loader "></div>-->
+                        <div class="ui active dimmer main_dimmer">
+                            <div class="ui large text loader main_loader"></div>
+                        </div>
+                        <div class="ui middle aligned grid" style="min-height:75%;">
+                            <div class="page column" style="max-width: 900px">
+                                <style>
+    .ui.table {
+        color: black;
+    }
+
+    #mainTable_wrapper {
+        overflow: scroll;
+    }
+</style>
+
+<link rel="stylesheet" type="text/css" href="/dist/css/datatables.min.css"/>
+<script type="text/javascript" src="/dist/js/datatables.min.js"></script>
+<h2 class="ui header page_title">Междугородние тарифы</h2>
+
+<form class="ui form  center aligned" method="get" style="padding: 20px" id="prices" action="/prices">
+    <div class="ui two item menu" style="">
+        <a class="active item" href="/prices">Междугородние</a>
+        <a class="item" href="/expedition">Экспедирование</a>
+    </div>
+    <div class="fields">
+        <div class="eight wide field">
+            <label>Город отправления</label>
+
+            <div class="ui fluid search selection dropdown" id="price_from" style="float: left; ">
+                <input type="hidden" name="from">
+                <i class="dropdown icon"></i>
+
+                <div class="default text">Город отправления</div>
+                <div class="menu">
+                    <div class="item" data-value="">Все</div>
+                                            <div class="item" data-value="1">Москва</div>                        <div class="item" data-value="2">Санкт-Петербург</div>                        <div class="item" data-value="3">Великий Новгород</div>                        <div class="item" data-value="4">Волгоград</div>                        <div class="item" data-value="5">Екатеринбург</div>                        <div class="item" data-value="6">Иркутск</div>                        <div class="item" data-value="7">Казань</div>                        <div class="item" data-value="8">Калининград</div>                        <div class="item" data-value="9">Краснодар</div>                        <div class="item" data-value="11">Мурманск</div>                        <div class="item" data-value="12">Оренбург</div>                        <div class="item" data-value="13">Псков</div>                        <div class="item" data-value="14">Самара</div>                        <div class="item" data-value="15">Советский</div>                        <div class="item" data-value="16">Тверь</div>                        <div class="item" data-value="17">Уфа</div>                        <div class="item" data-value="19">Великие Луки</div>                        <div class="item" data-value="20">Новосибирск</div>                        <div class="item" data-value="21">Омск</div>                        <div class="item" data-value="22">Сочи</div>                        <div class="item" data-value="23">Кемерово</div>                        <div class="item" data-value="24">Тюмень</div>                        <div class="item" data-value="26">Ростов-на-Дону</div>                        <div class="item" data-value="27">Тольятти</div>                        <div class="item" data-value="31">Анапа</div>                        <div class="item" data-value="33">Ангарск</div>                        <div class="item" data-value="35">Армавир</div>                        <div class="item" data-value="38">Архангельск</div>                        <div class="item" data-value="39">Астрахань</div>                        <div class="item" data-value="41">Ачинск</div>                        <div class="item" data-value="42">Балаково</div>                        <div class="item" data-value="46">Белгород</div>                        <div class="item" data-value="51">Бийск</div>                        <div class="item" data-value="52">Биробиджан</div>                        <div class="item" data-value="53">Благовещенск</div>                        <div class="item" data-value="54">Братск</div>                        <div class="item" data-value="55">Брянск</div>                        <div class="item" data-value="56">Бугульма</div>                        <div class="item" data-value="63">Владивосток</div>                        <div class="item" data-value="64">Владикавказ</div>                        <div class="item" data-value="65">Владимир</div>                        <div class="item" data-value="67">Волжский</div>                        <div class="item" data-value="68">Вологда</div>                        <div class="item" data-value="69">Воркута</div>                        <div class="item" data-value="70">Воронеж</div>                        <div class="item" data-value="74">Геленджик</div>                        <div class="item" data-value="75">Глазов</div>                        <div class="item" data-value="78">Димитровград</div>                        <div class="item" data-value="81">Елец</div>                        <div class="item" data-value="86">Златоуст</div>                        <div class="item" data-value="87">Иваново</div>                        <div class="item" data-value="88">Ижевск</div>                        <div class="item" data-value="90">Йошкар - Ола</div>                        <div class="item" data-value="91">Калуга</div>                        <div class="item" data-value="100">Кинешма</div>                        <div class="item" data-value="101">Киров</div>                        <div class="item" data-value="104">Когалым</div>                        <div class="item" data-value="105">Комсомольск на Амуре</div>                        <div class="item" data-value="109">Кострома</div>                        <div class="item" data-value="112">Кузнецк</div>                        <div class="item" data-value="116">Курган</div>                        <div class="item" data-value="117">Курск</div>                        <div class="item" data-value="118">Кызыл</div>                        <div class="item" data-value="119">Лабытнанги</div>                        <div class="item" data-value="122">Липецк</div>                        <div class="item" data-value="124">Магнитогорск</div>                        <div class="item" data-value="125">Майкоп</div>                        <div class="item" data-value="126">Махачкала</div>                        <div class="item" data-value="129">Миасс</div>                        <div class="item" data-value="139">Набережные Челны</div>                        <div class="item" data-value="141">Нальчик</div>                        <div class="item" data-value="142">Находка</div>                        <div class="item" data-value="145">Нерюнгри</div>                        <div class="item" data-value="146">Нижневартовск</div>                        <div class="item" data-value="147">Нижний Новгород</div>                        <div class="item" data-value="148">Нижний Тагил</div>                        <div class="item" data-value="150">Новокузнецк</div>                        <div class="item" data-value="151">Новороссийск</div>                        <div class="item" data-value="154">Новый Уренгой</div>                        <div class="item" data-value="155">Ноябрьск</div>                        <div class="item" data-value="156">Нягань</div>                        <div class="item" data-value="161">Орел</div>                        <div class="item" data-value="162">Орск</div>                        <div class="item" data-value="164">Пенза</div>                        <div class="item" data-value="166">Пермь</div>                        <div class="item" data-value="167">Петрозаводск</div>                        <div class="item" data-value="168">Петропавловск-Камчатский</div>                        <div class="item" data-value="169">Печора</div>                        <div class="item" data-value="173">Пятигорск</div>                        <div class="item" data-value="179">Рыбинск</div>                        <div class="item" data-value="180">Рязань</div>                        <div class="item" data-value="181">Салават</div>                        <div class="item" data-value="182">Саранск</div>                        <div class="item" data-value="183">Сарапул</div>                        <div class="item" data-value="184">Саратов</div>                        <div class="item" data-value="186">Северобайкальск</div>                        <div class="item" data-value="187">Северодвинск</div>                        <div class="item" data-value="188">Соликамск</div>                        <div class="item" data-value="192">Смоленск</div>                        <div class="item" data-value="195">Ставрополь</div>                        <div class="item" data-value="196">Старый Оскол</div>                        <div class="item" data-value="197">Стерлитамак</div>                        <div class="item" data-value="198">Сургут</div>                        <div class="item" data-value="199">Сызрань</div>                        <div class="item" data-value="200">Сыктывкар</div>                        <div class="item" data-value="202">Таганрог</div>                        <div class="item" data-value="204">Тамбов</div>                        <div class="item" data-value="209">Томск</div>                        <div class="item" data-value="211">Тула</div>                        <div class="item" data-value="212">Тында</div>                        <div class="item" data-value="215">Улан-Удэ</div>                        <div class="item" data-value="216">Ульяновск</div>                        <div class="item" data-value="217">Усинск</div>                        <div class="item" data-value="219">Уссурийск</div>                        <div class="item" data-value="222">Ухта</div>                        <div class="item" data-value="223">Хабаровск</div>                        <div class="item" data-value="224">Ханты-Мансийск</div>                        <div class="item" data-value="225">Чебоксары</div>                        <div class="item" data-value="226">Челябинск</div>                        <div class="item" data-value="227">Череповец</div>                        <div class="item" data-value="229">Чита</div>                        <div class="item" data-value="231">Шахты</div>                        <div class="item" data-value="233">Элиста</div>                        <div class="item" data-value="234">Южно-Сахалинск</div>                        <div class="item" data-value="235">Якутск</div>                        <div class="item" data-value="238">Ярославль</div>                        <div class="item" data-value="239">Абакан</div>                        <div class="item" data-value="240">Буденовск</div>                        <div class="item" data-value="241">Иркутск (ж/д)</div>                        <div class="item" data-value="242">Барнаул</div>                        <div class="item" data-value="243">Севастополь</div>                        <div class="item" data-value="244">Красноярск (ж/д)</div>                        <div class="item" data-value="248">Урай</div>                        <div class="item" data-value="249">Симферополь</div>                        <div class="item" data-value="250">Атырау</div>                        <div class="item" data-value="251">Дербент</div>                        <div class="item" data-value="252">Нефтеюганск</div>                        <div class="item" data-value="253">Хасавюрт</div>                        <div class="item" data-value="254">Ялта</div>                        <div class="item" data-value="255">Феодосия</div>                        <div class="item" data-value="256">Керчь</div>                </div>
+            </div>
+        </div>
+        <div class="eight wide field">
+            <label>Город назначения</label>
+
+            <div class="ui fluid search selection dropdown" id="price_to" style="float: left; ">
+                <input type="hidden" name="to">
+                <i class="dropdown icon"></i>
+
+                <div class="default text">Город назначения</div>
+                <div class="menu">
+                    <div class="item" data-value="">Все</div>
+                                            <div class="item" data-value="1">Москва</div>                        <div class="item" data-value="2">Санкт-Петербург</div>                        <div class="item" data-value="3">Великий Новгород</div>                        <div class="item" data-value="4">Волгоград</div>                        <div class="item" data-value="5">Екатеринбург</div>                        <div class="item" data-value="6">Иркутск</div>                        <div class="item" data-value="7">Казань</div>                        <div class="item" data-value="8">Калининград</div>                        <div class="item" data-value="9">Краснодар</div>                        <div class="item" data-value="11">Мурманск</div>                        <div class="item" data-value="12">Оренбург</div>                        <div class="item" data-value="13">Псков</div>                        <div class="item" data-value="14">Самара</div>                        <div class="item" data-value="15">Советский</div>                        <div class="item" data-value="16">Тверь</div>                        <div class="item" data-value="17">Уфа</div>                        <div class="item" data-value="19">Великие Луки</div>                        <div class="item" data-value="20">Новосибирск</div>                        <div class="item" data-value="21">Омск</div>                        <div class="item" data-value="22">Сочи</div>                        <div class="item" data-value="23">Кемерово</div>                        <div class="item" data-value="24">Тюмень</div>                        <div class="item" data-value="26">Ростов-на-Дону</div>                        <div class="item" data-value="27">Тольятти</div>                        <div class="item" data-value="31">Анапа</div>                        <div class="item" data-value="33">Ангарск</div>                        <div class="item" data-value="35">Армавир</div>                        <div class="item" data-value="38">Архангельск</div>                        <div class="item" data-value="39">Астрахань</div>                        <div class="item" data-value="41">Ачинск</div>                        <div class="item" data-value="42">Балаково</div>                        <div class="item" data-value="46">Белгород</div>                        <div class="item" data-value="51">Бийск</div>                        <div class="item" data-value="52">Биробиджан</div>                        <div class="item" data-value="53">Благовещенск</div>                        <div class="item" data-value="54">Братск</div>                        <div class="item" data-value="55">Брянск</div>                        <div class="item" data-value="56">Бугульма</div>                        <div class="item" data-value="63">Владивосток</div>                        <div class="item" data-value="64">Владикавказ</div>                        <div class="item" data-value="65">Владимир</div>                        <div class="item" data-value="67">Волжский</div>                        <div class="item" data-value="68">Вологда</div>                        <div class="item" data-value="69">Воркута</div>                        <div class="item" data-value="70">Воронеж</div>                        <div class="item" data-value="74">Геленджик</div>                        <div class="item" data-value="75">Глазов</div>                        <div class="item" data-value="78">Димитровград</div>                        <div class="item" data-value="81">Елец</div>                        <div class="item" data-value="86">Златоуст</div>                        <div class="item" data-value="87">Иваново</div>                        <div class="item" data-value="88">Ижевск</div>                        <div class="item" data-value="90">Йошкар - Ола</div>                        <div class="item" data-value="91">Калуга</div>                        <div class="item" data-value="100">Кинешма</div>                        <div class="item" data-value="101">Киров</div>                        <div class="item" data-value="104">Когалым</div>                        <div class="item" data-value="105">Комсомольск на Амуре</div>                        <div class="item" data-value="109">Кострома</div>                        <div class="item" data-value="112">Кузнецк</div>                        <div class="item" data-value="116">Курган</div>                        <div class="item" data-value="117">Курск</div>                        <div class="item" data-value="118">Кызыл</div>                        <div class="item" data-value="119">Лабытнанги</div>                        <div class="item" data-value="122">Липецк</div>                        <div class="item" data-value="124">Магнитогорск</div>                        <div class="item" data-value="125">Майкоп</div>                        <div class="item" data-value="126">Махачкала</div>                        <div class="item" data-value="129">Миасс</div>                        <div class="item" data-value="139">Набережные Челны</div>                        <div class="item" data-value="141">Нальчик</div>                        <div class="item" data-value="142">Находка</div>                        <div class="item" data-value="145">Нерюнгри</div>                        <div class="item" data-value="146">Нижневартовск</div>                        <div class="item" data-value="147">Нижний Новгород</div>                        <div class="item" data-value="148">Нижний Тагил</div>                        <div class="item" data-value="150">Новокузнецк</div>                        <div class="item" data-value="151">Новороссийск</div>                        <div class="item" data-value="154">Новый Уренгой</div>                        <div class="item" data-value="155">Ноябрьск</div>                        <div class="item" data-value="156">Нягань</div>                        <div class="item" data-value="161">Орел</div>                        <div class="item" data-value="162">Орск</div>                        <div class="item" data-value="164">Пенза</div>                        <div class="item" data-value="166">Пермь</div>                        <div class="item" data-value="167">Петрозаводск</div>                        <div class="item" data-value="168">Петропавловск-Камчатский</div>                        <div class="item" data-value="169">Печора</div>                        <div class="item" data-value="173">Пятигорск</div>                        <div class="item" data-value="179">Рыбинск</div>                        <div class="item" data-value="180">Рязань</div>                        <div class="item" data-value="181">Салават</div>                        <div class="item" data-value="182">Саранск</div>                        <div class="item" data-value="183">Сарапул</div>                        <div class="item" data-value="184">Саратов</div>                        <div class="item" data-value="186">Северобайкальск</div>                        <div class="item" data-value="187">Северодвинск</div>                        <div class="item" data-value="188">Соликамск</div>                        <div class="item" data-value="192">Смоленск</div>                        <div class="item" data-value="195">Ставрополь</div>                        <div class="item" data-value="196">Старый Оскол</div>                        <div class="item" data-value="197">Стерлитамак</div>                        <div class="item" data-value="198">Сургут</div>                        <div class="item" data-value="199">Сызрань</div>                        <div class="item" data-value="200">Сыктывкар</div>                        <div class="item" data-value="202">Таганрог</div>                        <div class="item" data-value="204">Тамбов</div>                        <div class="item" data-value="209">Томск</div>                        <div class="item" data-value="211">Тула</div>                        <div class="item" data-value="212">Тында</div>                        <div class="item" data-value="215">Улан-Удэ</div>                        <div class="item" data-value="216">Ульяновск</div>                        <div class="item" data-value="217">Усинск</div>                        <div class="item" data-value="219">Уссурийск</div>                        <div class="item" data-value="222">Ухта</div>                        <div class="item" data-value="223">Хабаровск</div>                        <div class="item" data-value="224">Ханты-Мансийск</div>                        <div class="item" data-value="225">Чебоксары</div>                        <div class="item" data-value="226">Челябинск</div>                        <div class="item" data-value="227">Череповец</div>                        <div class="item" data-value="229">Чита</div>                        <div class="item" data-value="231">Шахты</div>                        <div class="item" data-value="233">Элиста</div>                        <div class="item" data-value="234">Южно-Сахалинск</div>                        <div class="item" data-value="235">Якутск</div>                        <div class="item" data-value="238">Ярославль</div>                        <div class="item" data-value="239">Абакан</div>                        <div class="item" data-value="240">Буденовск</div>                        <div class="item" data-value="241">Иркутск (ж/д)</div>                        <div class="item" data-value="242">Барнаул</div>                        <div class="item" data-value="243">Севастополь</div>                        <div class="item" data-value="244">Красноярск (ж/д)</div>                        <div class="item" data-value="248">Урай</div>                        <div class="item" data-value="249">Симферополь</div>                        <div class="item" data-value="250">Атырау</div>                        <div class="item" data-value="251">Дербент</div>                        <div class="item" data-value="252">Нефтеюганск</div>                        <div class="item" data-value="253">Хасавюрт</div>                        <div class="item" data-value="254">Ялта</div>                        <div class="item" data-value="255">Феодосия</div>                        <div class="item" data-value="256">Керчь</div>                </div>
+            </div>
+        </div>
+    </div>
+    <div class="inline fields">
+        <label style="color:white">По:</label>
+
+        <div class="field">
+            <div class="ui radio checkbox">
+                <input type="radio" checked value="1" name="type"
+                       tabindex="0" class="hidden">
+                <label>Весу</label>
+            </div>
+        </div>
+        <div class="field">
+            <div class="ui radio checkbox">
+                <input type="radio"  value="2" name="type"
+                       tabindex="0" class="hidden">
+                <label>Объему</label>
+            </div>
+        </div>
+
+    </div>
+    <button style="margin-top: 20px;background: #FF4E00;" class="ui blue button submit">
+        <i class="check icon"></i>
+        Показать тарифы
+    </button>
+    <!--            <button class="ui submit button">Показать тарифы</button>-->
+
+    </form>
+            
+            <div style="background: #fff;padding: 20px;margin-bottom: 40px;">
+                <h2 style="color:#EC7357">Тарифы на перевозку груза из города Санкт-Петербург</h2><a href="//cts-group.ru/doc/СПБ прайс 07.09.26.xlsx" target="_blank" class="ui labeled icon button" style="background:#EC7357;color:white;">
+                    <i class="download icon"></i>
+                    Скачать
+                </a>                    <div class="ui info message">
+                        <p>Тарифы на возврат груза отправителю: <a href="/doc/ВОЗВРАТ_Отправителю_с_теминала_ТК1.doc" download="">ВОЗВРАТ Отправителю с теминала ТК.doc</a></p>
+                    </div>
+                
+
+                <table class="ui table" id="mainTable"
+                       style="max-width: 100%;overflow: scroll;margin-top: 20px;display: none">
+                    <thead>
+                                        <th>Город<br />получения</th>                    <th>
+                        В пути<br>(дней)
+                    </th>
+                    <th>Цена <br> (мин)</th>
+                                            <th>
+                            <nobr>с 3001 </nobr>
+                            <br/>
+                            <nobr> до свыше</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 2000 </nobr>
+                            <br/>
+                            <nobr> до 3000</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 1501 </nobr>
+                            <br/>
+                            <nobr> до 2000</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 1201 </nobr>
+                            <br/>
+                            <nobr> до 1500</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 1001 </nobr>
+                            <br/>
+                            <nobr> до 1200</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 801 </nobr>
+                            <br/>
+                            <nobr> до 1000</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 501 </nobr>
+                            <br/>
+                            <nobr> до 800</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 301 </nobr>
+                            <br/>
+                            <nobr> до 500</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 201 </nobr>
+                            <br/>
+                            <nobr> до 300</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 101 </nobr>
+                            <br/>
+                            <nobr> до 200</nobr>
+                        </th>
+                                            <th>
+                            <nobr>с 1 </nobr>
+                            <br/>
+                            <nobr> до 100</nobr>
+                        </th>
+                                        </thead>
+                    <!--
+
+
+
+
+                    -->
+                    <tbody style="max-height: 100vh;overflow-y: scroll">
+                                                <tr>
+                                <td>Калининград</td>
+                                <td>12-16</td>
+                                <td>1700.00</td>
+                                                                    <td>33.60</td>
+                                                                        <td>33.60</td>
+                                                                        <td>34.20</td>
+                                                                        <td>34.80</td>
+                                                                        <td>34.80</td>
+                                                                        <td>35.40</td>
+                                                                        <td>36.00</td>
+                                                                        <td>36.00</td>
+                                                                        <td>37.20</td>
+                                                                        <td>37.20</td>
+                                                                        <td>37.20</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Оренбург</td>
+                                <td>5-7</td>
+                                <td>1100.00</td>
+                                                                    <td>25.10</td>
+                                                                        <td>25.10</td>
+                                                                        <td>25.30</td>
+                                                                        <td>25.30</td>
+                                                                        <td>25.50</td>
+                                                                        <td>25.50</td>
+                                                                        <td>25.50</td>
+                                                                        <td>25.70</td>
+                                                                        <td>25.70</td>
+                                                                        <td>25.90</td>
+                                                                        <td>25.90</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Ижевск</td>
+                                <td>4-5</td>
+                                <td>1200.00</td>
+                                                                    <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Магнитогорск</td>
+                                <td>5-7</td>
+                                <td>1200.00</td>
+                                                                    <td>26.30</td>
+                                                                        <td>26.30</td>
+                                                                        <td>26.70</td>
+                                                                        <td>26.70</td>
+                                                                        <td>26.70</td>
+                                                                        <td>27.20</td>
+                                                                        <td>27.20</td>
+                                                                        <td>27.20</td>
+                                                                        <td>27.60</td>
+                                                                        <td>27.60</td>
+                                                                        <td>27.60</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Ростов-на-Дону</td>
+                                <td>5-6</td>
+                                <td>900.00</td>
+                                                                    <td>20.90</td>
+                                                                        <td>21.10</td>
+                                                                        <td>21.30</td>
+                                                                        <td>21.30</td>
+                                                                        <td>21.30</td>
+                                                                        <td>21.50</td>
+                                                                        <td>21.50</td>
+                                                                        <td>21.50</td>
+                                                                        <td>21.70</td>
+                                                                        <td>21.70</td>
+                                                                        <td>21.70</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Великие Луки</td>
+                                <td>3</td>
+                                <td>1100.00</td>
+                                                                    <td>16.10</td>
+                                                                        <td>16.10</td>
+                                                                        <td>16.30</td>
+                                                                        <td>16.90</td>
+                                                                        <td>17.00</td>
+                                                                        <td>17.40</td>
+                                                                        <td>18.30</td>
+                                                                        <td>18.70</td>
+                                                                        <td>19.60</td>
+                                                                        <td>20.00</td>
+                                                                        <td>20.20</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Уфа</td>
+                                <td>4-5</td>
+                                <td>1200.00</td>
+                                                                    <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                        <td>24.80</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Тверь</td>
+                                <td>1-2</td>
+                                <td>400.00</td>
+                                                                    <td>14.50</td>
+                                                                        <td>14.50</td>
+                                                                        <td>14.50</td>
+                                                                        <td>14.80</td>
+                                                                        <td>14.80</td>
+                                                                        <td>15.00</td>
+                                                                        <td>15.40</td>
+                                                                        <td>15.40</td>
+                                                                        <td>15.60</td>
+                                                                        <td>15.80</td>
+                                                                        <td>16.00</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Псков</td>
+                                <td>1</td>
+                                <td>480.00</td>
+                                                                    <td>11.50</td>
+                                                                        <td>11.50</td>
+                                                                        <td>11.60</td>
+                                                                        <td>11.80</td>
+                                                                        <td>12.00</td>
+                                                                        <td>12.40</td>
+                                                                        <td>12.90</td>
+                                                                        <td>13.10</td>
+                                                                        <td>13.80</td>
+                                                                        <td>14.00</td>
+                                                                        <td>14.10</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Мурманск</td>
+                                <td>3-4</td>
+                                <td>350.00</td>
+                                                                    <td>12.50</td>
+                                                                        <td>12.50</td>
+                                                                        <td>12.50</td>
+                                                                        <td>12.60</td>
+                                                                        <td>12.60</td>
+                                                                        <td>12.80</td>
+                                                                        <td>12.80</td>
+                                                                        <td>13.00</td>
+                                                                        <td>13.00</td>
+                                                                        <td>13.20</td>
+                                                                        <td>13.20</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Краснодар</td>
+                                <td>4-5</td>
+                                <td>900.00</td>
+                                                                    <td>20.50</td>
+                                                                        <td>20.50</td>
+                                                                        <td>20.90</td>
+                                                                        <td>21.30</td>
+                                                                        <td>21.70</td>
+                                                                        <td>21.70</td>
+                                                                        <td>22.30</td>
+                                                                        <td>22.90</td>
+                                                                        <td>23.30</td>
+                                                                        <td>23.70</td>
+                                                                        <td>24.00</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Екатеринбург</td>
+                                <td>4-5</td>
+                                <td>1100.00</td>
+                                                                    <td>24.00</td>
+                                                                        <td>24.00</td>
+                                                                        <td>24.00</td>
+                                                                        <td>24.00</td>
+                                                                        <td>24.50</td>
+                                                                        <td>24.50</td>
+                                                                        <td>25.00</td>
+                                                                        <td>25.00</td>
+                                                                        <td>26.70</td>
+                                                                        <td>26.70</td>
+                                                                        <td>26.70</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Москва</td>
+                                <td>2</td>
+                                <td>300.00</td>
+                                                                    <td>8.00</td>
+                                                                        <td>8.00</td>
+                                                                        <td>8.00</td>
+                                                                        <td>8.30</td>
+                                                                        <td>8.30</td>
+                                                                        <td>8.50</td>
+                                                                        <td>8.50</td>
+                                                                        <td>8.70</td>
+                                                                        <td>8.70</td>
+                                                                        <td>8.90</td>
+                                                                        <td>8.90</td>
+                                                                </tr>
+
+                                                        <tr>
+                                <td>Великий Новгород</td>
+                                <td>1</td>
+                                <td>700.00</td>
+                                                                    <td>11.50</td>
+                                                                        <td>11.50</td>
+                                                                        <td>11.50</td>
+                                                                        <td>11.50</td>
+                                                                        <td>12.10</td>
+                                                                        <td>12.10</td>
+                                                                        <td>12.90</td>
+                                                                        <td>13.20</td>
+                                                                        <td>13.60</td>
+                                                                        <td>14.40</td>
+                                                                        <td>14.40</td>
+                                                                </tr>
+
+                                                </tbody>
+                </table>
+            </div>
+                
+    <!--<table class="ui table">-->
+    <!--    <tr>-->
+    <!--        <td>-->
+    <!--            -->    <!--        </td>-->
+    <!--    </tr>-->
+    <!--</table>-->
+    <script>
+        $(document).ready(function () {
+            $('table').css('width', '100%');
+            $('.wrapper').css('max-width', '100%');
+            $('.page').css('max-width', 'none');
+            $('.top.menu').css('max-width', '1024px');
+            $('form').css('max-width', '900px');
+            $('form').css('margin', 'auto');
+            $('.top.menu').css('margin', 'auto');
+            $('#price_from').dropdown('set selected', '2');
+            $('#price_to').dropdown('set selected', '');
+            $('.ui .dropdown').dropdown({message: {noResults: 'Город не найден'}});
+            $('.ui.checkbox').checkbox();
+            $('#mainTable').DataTable({
+                "language": {
+                    "url": "/dist/russian.json"
+                },
+//                "scrollY": 400,
+            });
+            $('#mainTable').fadeIn(100);
+        });
+    </script>                            </div>
+                        </div>
+                    </div>
+                    <div class="ui segment inverted footer">
+                        © 2026 CTS-GROUP
+                        <div class="ui horizontal inverted list">
+                            <a href="/prices" class="item">
+                                Тарифы
+                            </a>
+                            <a href="/" class="item">
+                                Калькулятор
+                            </a>
+                            <a href="/contacts" class="item">
+                                Контакты
+                            </a>
+                            <a href="/documents" class="item">
+                                Документы
+                            </a>
+                            <a href="/epd/" class="item">
+                                ЭПД
+                            </a>
+                            <a href="/about" class="item">
+                                О нас
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+    <script src="/dist/js/menu.js?v=7"></script><script src="/dist/js/cons.js?v=7"></script>
+<script>
+    var snow = localStorage.getItem('snow');
+    if (snow !== undefined && snow == 0) {
+        $('.umbrella_button .inverted').html('<i class="sun icon"></i>Снег');
+    } else {
+        $('.umbrella_button .inverted').html('<i class="umbrella icon"></i>Зонтик');
+    }
+</script>
+<script>
+        (function () {
+        [].slice.call(document.querySelectorAll('.menu')).forEach(function (menu) {
+            var menuItems = menu.querySelectorAll('.menu__link'),
+                setCurrent = function (ev) {
+                    ev.preventDefault();
+
+                    var item = ev.target.parentNode; // li
+
+                    // return if already current
+                    if (classie.has(item, 'menu__item--current')) {
+                        return false;
+                    }
+                    // remove current
+                    classie.remove(menu.querySelector('.menu__item--current'), 'menu__item--current');
+                    // set current
+                    classie.add(item, 'menu__item--current');
+                };
+
+            [].slice.call(menuItems).forEach(function (el) {
+                el.addEventListener('click', setCurrent);
+            });
+        });
+
+        [].slice.call(document.querySelectorAll('.link-copy')).forEach(function (link) {
+            link.setAttribute('data-clipboard-text', location.protocol + '//' + location.host + location.pathname + '#' + link.parentNode.id);
+            new Clipboard(link);
+            link.addEventListener('click', function () {
+                classie.add(link, 'link-copy--animate');
+                setTimeout(function () {
+                    classie.remove(link, 'link-copy--animate');
+                }, 300);
+            });
+        });
+    })(window);
+    </script>
+<script>
+    $(document).ready(function () {
+        $('#top_dropdown').dropdown('set selected', '1');
+        $('#top_dropdown').dropdown({
+            onChange: function (value) {
+                console.log('changing city');
+                sendReq('changefilial', 'filial=' + value, function () {
+                    location.reload()
+                });
+            },
+            message: {noResults: 'Филиал не найден'}
+        });
+        $('.ui.modal .dropdown').dropdown();
+    });
+</script>
+</body>
+</html>

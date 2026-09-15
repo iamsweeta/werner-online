@@ -1,0 +1,65 @@
+{
+  "origin": "Санкт-Петербург",
+  "destination": "Москва",
+  "origin_terminal": "Санкт-Петербург",
+  "destination_terminal": "Москва-Юг",
+  "captured_at": "2026-09-16T00:38:55+03:00",
+  "calculations": [
+    {
+      "profile_id": "w10000",
+      "request": {
+        "FORM_TYPE": "calc",
+        "AJAX": "Y",
+        "FROM[CITY_ID]": "175",
+        "TO[CITY_ID]": "174",
+        "FROM[IS_DELIVERY]": "N",
+        "TO[IS_DELIVERY]": "N",
+        "PARAMS": "all",
+        "PARAMS[1][TYPE]": "all",
+        "PARAMS[1][WEIGHT]": "10000.0",
+        "PARAMS[1][VOLUME]": "40.0",
+        "PARAMS[1][COUNT_PLACE]": "20",
+        "GRUZ": "Груз",
+        "INSURANCE[IS_ACTIVE]": "Y",
+        "INSURANCE[PRICE]": "100"
+      },
+      "response": {
+        "status": true,
+        "result": {
+          "individual": true
+        },
+        "result_nocourier": {
+          "individual": true
+        }
+      }
+    },
+    {
+      "profile_id": "w20000",
+      "request": {
+        "FORM_TYPE": "calc",
+        "AJAX": "Y",
+        "FROM[CITY_ID]": "175",
+        "TO[CITY_ID]": "174",
+        "FROM[IS_DELIVERY]": "N",
+        "TO[IS_DELIVERY]": "N",
+        "PARAMS": "all",
+        "PARAMS[1][TYPE]": "all",
+        "PARAMS[1][WEIGHT]": "20000.0",
+        "PARAMS[1][VOLUME]": "80.0",
+        "PARAMS[1][COUNT_PLACE]": "40",
+        "GRUZ": "Груз",
+        "INSURANCE[IS_ACTIVE]": "Y",
+        "INSURANCE[PRICE]": "100"
+      },
+      "response": {
+        "status": true,
+        "result": {
+          "individual": true
+        },
+        "result_nocourier": {
+          "individual": true
+        }
+      }
+    }
+  ]
+}

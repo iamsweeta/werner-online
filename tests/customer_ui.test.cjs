@@ -1,0 +1,21 @@
+// Two requested unit modes, minimums, graph themes and persistence.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
+const dom=new JSDOM(fs.readFileSync(path.join(root,'static/index.html'),'utf8'),{url:'http://localhost:8423',runScripts:'outside-only'});
+const w=dom.window,$=id=>w.document.getElementById(id);
+w.eval(fs.readFileSync(path.join(root,'static/app.js'),'utf8').replace('init().catch(e=>toast(e.message));','')+'\nwindow.testState=state;');
+const s=w.testState,profiles=[{id:'w005',weight_kg:5,label:'3–5 кг',range_weight:'3–5 кг'},{id:'min',weight_kg:1,is_minimum_profile:true,label:'МИН'},{id:'w100',weight_kg:100,label:'до 100 кг',range_weight:'до 100 кг'}];
+s.options={profiles,companies:[{id:'Werner',label:'Werner'}]};s.calculationCompanies.add('Werner');
+const items=[{price:196,comparison_value:196},{price:196,comparison_value:196},{price:1500,comparison_value:1500,published_rate_per_kg:10}].map(i=>({...i,company:'Werner',company_label:'Werner',uploaded:true}));
+const data={profiles:profiles.map((p,i)=>({profile:p,items:[items[i]]}))};
+assert.deepEqual([...$('unitModeSelect').options].map(x=>x.value),['total','per_kg']);assert.equal(s.unitMode,'total');
+w.renderMatrix(data);assert.match($('matrixBody').textContent,/196 ₽/);assert.match($('matrixBody').textContent,/1\s500 ₽/);assert.doesNotMatch($('matrixBody').textContent,/₽\/кг/);
+$('unitModeSelect').value='per_kg';$('unitModeSelect').dispatchEvent(new w.Event('change'));
+assert.equal(w.exactViewValue(items[0],profiles[0]),39.2);assert.equal(w.exactViewValue(items[2],profiles[2]),15);assert.equal(w.exactViewValue(items[1],profiles[1]),196);assert.equal(w.activeUnit(profiles[1]),'₽');
+assert.match($('matrixBody').textContent,/39,2 ₽\/кг/);assert.match($('matrixBody').textContent,/15 ₽\/кг/);assert.match($('unitModeNote').textContent,/расчётная величина/);assert.equal(w.localStorage.getItem('tariff-unit-mode-v50'),'per_kg');
+assert.equal(w.exactViewValue({price:500,comparison_value:500,price_is_minimum:true},profiles[0]),null);assert.equal(w.exactViewValue({},profiles[0]),null);
+s.graphScope='heavy';w.renderTariffGraph(data);assert.match($('rateChart').textContent,/₽\/кг/);
+w.document.documentElement.dataset.theme='light';const light=w.graphColor(0);w.toggleTheme();assert.equal(w.document.documentElement.dataset.theme,'dark');assert.notEqual(w.graphColor(0),light);w.toggleTheme();assert.equal(w.graphColor(0),light);
+$('unitModeSelect').value='total';$('unitModeSelect').dispatchEvent(new w.Event('change'));assert.equal(w.exactViewValue(items[2],profiles[2]),1500);assert.equal(w.localStorage.getItem('tariff-unit-mode-v50'),'total');assert.doesNotMatch($('rateChart').textContent,/₽\/кг/);
+assert.equal($('bulkScope').value,'reference');assert.ok($('extendedRoutesToggle'));assert.ok($('documentPointsButton'));
+dom.window.close();console.log('PASS: exactly two unit modes, effective kg cost, minimum floor, clear labels, graph themes, persistence and existing features');

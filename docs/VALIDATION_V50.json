@@ -1,0 +1,42 @@
+{
+  "routes": 254,
+  "companies": 17,
+  "checked_price_cells": 125222,
+  "sheets": 43,
+  "seconds": 63.11,
+  "bytes": 3233839,
+  "network_calls": 0,
+  "note": "Synthetic data for tests only; not shipped.",
+  "contrast": {
+    "light": {
+      "text/bg": 17.19,
+      "text/surface": 17.94,
+      "text/surface2": 16.3,
+      "muted/bg": 6.47,
+      "muted/surface": 6.75,
+      "muted/surface2": 6.13,
+      "primaryText/primary": 5.99
+    },
+    "dark": {
+      "text/bg": 18.19,
+      "text/surface": 16.77,
+      "text/surface2": 15.16,
+      "muted/bg": 10.39,
+      "muted/surface": 9.58,
+      "muted/surface2": 8.66,
+      "primaryText/primary": 8.2
+    }
+  },
+  "release_smoke": {
+    "version": "50.0",
+    "companies": 17,
+    "destinations": 127,
+    "http_export_bytes": 1537757,
+    "result": "PASS"
+  },
+  "python_tests": 166,
+  "python_result": "PASS",
+  "jsdom_scenarios": 5,
+  "jsdom_result": "PASS",
+  "artifact_formula_errors": 0
+}

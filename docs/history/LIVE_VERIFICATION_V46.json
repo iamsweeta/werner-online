@@ -1,0 +1,1376 @@
+[
+  {
+    "origin": "Москва",
+    "destination": "Санкт-Петербург",
+    "results": [
+      {
+        "company": "Пролайн",
+        "ok": true,
+        "rows": 28,
+        "message": "Пролайн: загружено диапазонов: 28"
+      },
+      {
+        "company": "Новая Линия",
+        "ok": true,
+        "rows": 27,
+        "message": "Новая Линия: загружено 27 диапазонов из NL-6e57637de6f9e8caf3a9a7b2, строка Санкт-Петербург (v42_requests)"
+      }
+    ],
+    "profiles": [
+      {
+        "profile": "w001",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 1 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w003",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 3 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w005",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 5 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w010",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 10 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w015",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 15 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w020",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 20 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w035",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 35 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w040",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 560.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 40 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w050",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 700.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 50 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 705.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "min",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-50579d191a8c4d0f4feb.json",
+            "calculation_basis": "Калькулятор: 1 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w100",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 1400.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 1410.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w200",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 2780.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 2820.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w250",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 3475.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 3525.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w300",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 4170.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 4050.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w400",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 5480.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 5400.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w500",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 6850.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 6750.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w600",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 8160.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 8100.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w700",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 9520.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 9450.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w750",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 10050.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 10125.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w800",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 10720.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 10640.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w1000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 13400.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 13300.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w1200",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 15840.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 15960.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w1500",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 19800.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 19350.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w2000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 26000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 25800.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w2500",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 30250.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 32250.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w3000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 36300.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 37800.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w5000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 60000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 63000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=24727&TO%5B%5D=ALL",
+            "source_file": "NL-6e57637de6f9e8caf3a9a7b2_Новая_Линия_Москва-Санкт-Петербург_4119f2f27a5b.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w10000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 120000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": null,
+            "online": false,
+            "availability": "on_request",
+            "source_url": "https://tknl.ru/calculator/",
+            "source_file": "LIVE-newline-3f711c21162fc8efc1bd.json",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w20000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 240000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-c434530fb88f7a63_Пролайн_official_8fb54bd9a996.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": null,
+            "online": false,
+            "availability": "on_request",
+            "source_url": "https://tknl.ru/calculator/",
+            "source_file": "LIVE-newline-3f711c21162fc8efc1bd.json",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "origin": "Санкт-Петербург",
+    "destination": "Москва",
+    "results": [
+      {
+        "company": "Пролайн",
+        "ok": true,
+        "rows": 28,
+        "message": "Пролайн: загружено диапазонов: 28"
+      },
+      {
+        "company": "Новая Линия",
+        "ok": true,
+        "rows": 27,
+        "message": "Новая Линия: загружено 27 диапазонов из NL-a56440393ce3c2a18d99d264, строка Москва-Юг (v42_requests)"
+      }
+    ],
+    "profiles": [
+      {
+        "profile": "w001",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 1 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w003",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 3 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w005",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 5 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w010",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 10 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w015",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 15 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w020",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 20 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w035",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 35 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w040",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 40 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w050",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 655.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 50 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "min",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 550.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-proline-d9e847bd5e3766576878.json",
+            "calculation_basis": "Калькулятор: 1 кг, 0 м³, 1 место, терминал → терминал; без дополнительных услуг"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w100",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 1310.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 1030.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w200",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 2600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 2060.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w250",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 3250.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 2575.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w300",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 3900.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 2910.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w400",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 5160.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 3880.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w500",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 6450.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 4850.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w600",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 7620.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 5820.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w700",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 8890.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 6790.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w750",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 9525.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 7275.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w800",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 10160.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 7680.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w1000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 12700.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 9600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w1200",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 15000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 11520.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w1500",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 18750.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 14100.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w2000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 24600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 18800.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w2500",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 30250.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 23500.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w3000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 36300.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 27600.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w5000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 60000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": 46000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://tknl.ru/price/dev.php?AJAX=N&RESULT=Y&PDF=Y&SERVICE=DELIVERY&FROM=175&TO%5B%5D=ALL",
+            "source_file": "NL-a56440393ce3c2a18d99d264_Новая_Линия_Санкт-Петербург-Москва_44f6e6b28fe4.pdf",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w10000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 120000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": null,
+            "online": false,
+            "availability": "on_request",
+            "source_url": "https://tknl.ru/calculator/",
+            "source_file": "LIVE-newline-c547999ce7a4fecd955e.json",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      },
+      {
+        "profile": "w20000",
+        "items": [
+          {
+            "company": "Пролайн",
+            "price": 240000.0,
+            "online": true,
+            "availability": null,
+            "source_url": "https://proline.su/dostavka/sbp-msk/",
+            "source_file": "LIVE-77aa3efc25eb42cf_Пролайн_official_a7174f30b600.html",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          },
+          {
+            "company": "Новая Линия",
+            "price": null,
+            "online": false,
+            "availability": "on_request",
+            "source_url": "https://tknl.ru/calculator/",
+            "source_file": "LIVE-newline-c547999ce7a4fecd955e.json",
+            "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+          }
+        ]
+      }
+    ]
+  }
+]

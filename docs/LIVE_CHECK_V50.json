@@ -1,0 +1,89 @@
+{
+  "date": "2026-09-15",
+  "downloads": [
+    {
+      "company": "Werner",
+      "origin": "Санкт-Петербург",
+      "path": "/workspace/scratch/d40229fcd047/evidence50/sources/werner_spb.xlsx",
+      "meta": {
+        "origin": "Санкт-Петербург",
+        "destination": "Абакан",
+        "source_url": "https://wernerus.ru/prices/46_from_36_RUB.xlsx",
+        "source_file": "LIVE-b43c0d412065dc82_Werner_official_4b0737f1abbe.xlsx",
+        "sha256": "4b0737f1abbe9e097da027ab186f2d1e5b8cb91c8e2bbea789c3230fa96e5679",
+        "captured_at": "2026-09-15T20:50:02+01:00",
+        "source_type": "Официальный прайс Werner",
+        "transport": "v42_curl-cffi-ranges",
+        "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+      },
+      "seconds": 72.78935808700004,
+      "ok": true
+    },
+    {
+      "company": "Werner",
+      "origin": "Москва",
+      "path": "/workspace/scratch/d40229fcd047/evidence50/sources/werner_moscow.xlsx",
+      "meta": {
+        "origin": "Москва",
+        "destination": "Абакан",
+        "source_url": "https://wernerus.ru/prices/46_from_35_RUB.xlsx",
+        "source_file": "LIVE-ff2090e56f38bcec_Werner_official_42d484f57819.xlsx",
+        "sha256": "42d484f57819eee5398c5d21c2f08af831ddbb4ced9af0327858164a6153e0d9",
+        "captured_at": "2026-09-15T20:50:02+01:00",
+        "source_type": "Официальный прайс Werner",
+        "transport": "v42_curl-cffi-ranges",
+        "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+      },
+      "seconds": 72.92389232900001,
+      "ok": true
+    },
+    {
+      "company": "Фортуна",
+      "origin": "Москва",
+      "path": "/workspace/scratch/d40229fcd047/evidence50/sources/fortuna.xlsx",
+      "meta": {
+        "origin": "Москва",
+        "destination": "Абакан",
+        "source_url": "https://fte.ru/upload/price_100926.xlsx",
+        "source_file": "LIVE-42acfb346a7082c5_Фортуна_official_815fd3ee2e53.xlsx",
+        "sha256": "815fd3ee2e53c124849fae486a07754f213d9677309f0bc466abcb2fdc22fe5c",
+        "captured_at": "2026-09-15T20:50:30+01:00",
+        "source_type": "Официальный прайс Фортуна",
+        "transport": "v42_requests-tls12",
+        "calculation_basis": "Опубликованный тариф по весу; объём и дополнительные услуги не включены"
+      },
+      "seconds": 100.32075173300001,
+      "ok": true
+    }
+  ],
+  "parsing": [
+    {
+      "company": "Werner",
+      "file": "werner_moscow",
+      "routes": 127,
+      "errors": [],
+      "seconds": 0.22,
+      "unpublished_routes": 0
+    },
+    {
+      "company": "Werner",
+      "file": "werner_spb",
+      "routes": 127,
+      "errors": [],
+      "seconds": 0.23,
+      "unpublished_routes": 0
+    },
+    {
+      "company": "Фортуна",
+      "file": "fortuna",
+      "routes": 438,
+      "errors": [
+        "Нет опубликованного тарифа для выбранного маршрута: Фортуна: в документе есть только железнодорожная перевозка; автотариф не опубликован",
+        "Нет опубликованного тарифа для выбранного маршрута: Фортуна: стоимость договорная («дог» в официальном прайсе), числовые ставки не опубликованы"
+      ],
+      "seconds": 2.28,
+      "unpublished_routes": 50
+    }
+  ],
+  "note": "Files were downloaded from the listed official URLs. Test copies are in tests/fixtures only; runtime reads no embedded prices."
+}

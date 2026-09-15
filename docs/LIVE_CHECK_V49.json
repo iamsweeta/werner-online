@@ -1,0 +1,45 @@
+[
+  {
+    "company": "ДЛ",
+    "ok": false,
+    "seconds": 8.9,
+    "error": "HTTP 401: www.dellin.ru"
+  },
+  {
+    "company": "Возовоз",
+    "ok": true,
+    "seconds": 39.1,
+    "profiles": 29,
+    "rate_profiles": 20,
+    "source_url": "https://files.vozovoz.ru/tariff/%D0%92%D0%BE%D0%B7%D0%BE%D0%B2%D0%BE%D0%B7_63925083131800.xls",
+    "sha256": "e5e958935b4746e72c4efc865a41a6a821817b4fab8919adf5781614cf903fba",
+    "captured_at": "2026-09-15T18:32:20+03:00",
+    "document_date": "2026-09-15",
+    "samples": {
+      "w005": {
+        "kind": "exact",
+        "price": 700.0
+      },
+      "w020": {
+        "kind": "exact",
+        "price": 1060.0
+      },
+      "min": {
+        "kind": "exact",
+        "price": 1130.0
+      },
+      "w100": {
+        "kind": "exact",
+        "price": 1910.0,
+        "rate_per_kg": 19.1,
+        "minimum": 1130.0
+      }
+    }
+  },
+  {
+    "company": "Werner",
+    "ok": false,
+    "seconds": 50.3,
+    "error": "requests: ReadTimeout: HTTPSConnectionPool(host='wernerus.ru', port=443): Read timed out. (read timeout=8); requests-tls12: TimeoutError: Истекло время загрузки прайса; curl-cffi-tls12: Timeout: Failed to perform, curl: (28) Operation timed out after 16003 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.; curl-tls12: DownloadError: curl: (28) Connection timed out after 7920 milliseconds\n"
+  }
+]
