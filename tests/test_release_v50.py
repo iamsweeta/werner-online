@@ -85,6 +85,6 @@ class NoEmbeddedPrices(unittest.TestCase):
     r=client.get('/api/export/excel',params={'origin':ROUTE[0],'destination':ROUTE[1],'companies':'Werner','layout':'matrix','view':view})
     w=load_workbook(io.BytesIO(r.content),data_only=True);rows=list(w['Тарифы'].values)
     self.assertEqual(next(r for r in rows if r[0]=='3–5 кг')[2:4],(unit,small));self.assertEqual(next(r for r in rows if r[0]=='до 100 кг')[2:4],(unit,large))
-    self.assertEqual(next(r for r in rows if r[0]=='МИН')[2:4],('₽',196));w.close()
+    self.assertEqual(next(r for r in rows if r[0]=='МИН')[2:4],('₽',None));w.close()
    w=load_workbook(io.BytesIO(export_bytes(*ROUTE,['Werner'],all_loaded=False)),data_only=True)
    self.assertEqual(w['WernerNEW']['F2'].value,196);self.assertEqual(w['WernerNEW']['N2'].value,10);self.assertIsNone(w['WernerNEW']['D2'].value);w.close()

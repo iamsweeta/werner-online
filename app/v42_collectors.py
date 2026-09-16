@@ -1394,9 +1394,10 @@ def collect_selected(companies:list[str], origin:str, destination:str, profile_i
             return finish(c,vals,meta)
         except Exception as exc:return finish(c,error=str(exc))
 
+    from contextvars import copy_context
     with ThreadPoolExecutor(max_workers=7) as pool:
-        futures={pool.submit(network_job,c):c for c in companies if c not in docs}
-        if docs:futures[pool.submit(document_job)]=None
+        futures={pool.submit(copy_context().run,network_job,c):c for c in companies if c not in docs}
+        if docs:futures[pool.submit(copy_context().run,document_job)]=None
         for future in as_completed(futures):
             c=futures[future]
             try:

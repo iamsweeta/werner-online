@@ -6,17 +6,21 @@
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <meta content="#ffffff" name="theme-color"/>
 <script>
-// Apply an explicit choice before painting. New installs start in light mode.
-try { document.documentElement.dataset.theme = localStorage.getItem('tariff-theme-v501') === 'dark' ? 'dark' : 'light'; } catch (_) {}
-document.querySelector('meta[name="theme-color"]').content = document.documentElement.dataset.theme === 'dark' ? '#090a0c' : '#ffffff';
+const requestedTheme = new URLSearchParams(location.search).get('theme');
+let initialTheme = 'light';
+try { initialTheme = localStorage.getItem('tariff-theme-v51') === 'dark' ? 'dark' : 'light'; } catch (_) {}
+if (requestedTheme === 'light' || requestedTheme === 'dark') initialTheme = requestedTheme;
+document.documentElement.dataset.theme = initialTheme;
+document.documentElement.style.colorScheme = initialTheme === 'dark' ? 'dark' : 'only light';
+document.querySelector('meta[name="theme-color"]').content = initialTheme === 'dark' ? '#090a0c' : '#ffffff';
 </script>
 <title>Тарифы — большая таблица и прайс-листы</title>
 <link href="/static/favicon.svg" rel="icon" type="image/svg+xml"/>
-<link href="/static/styles.css?v=501" rel="stylesheet"/>
+<link href="/static/styles.css?v=510" rel="stylesheet"/>
 </head>
 <body>
 <div class="app-shell"><aside class="sidebar"><a class="brand" data-open-workspace="bulk" href="#"><span aria-hidden="true" class="brand-mark">Т</span><span><strong>Тарифы</strong><small>Работа с прайс-листами</small></span></a><nav aria-label="Разделы приложения" class="workspace-nav" role="tablist"><button aria-controls="bulkPanel" aria-selected="true" class="nav-item active" data-workspace="bulk" id="bulkOpenButton" role="tab"><span class="nav-number">01</span><span>Большая таблица</span></button><button aria-controls="routeWorkspace" aria-selected="false" class="nav-item" data-workspace="route" id="routeTab" role="tab"><span class="nav-number">02</span><span>Один маршрут</span></button><button aria-controls="documentsPanel" aria-selected="false" class="nav-item" data-workspace="documents" id="documentsTab" role="tab"><span class="nav-number">03</span><span>Прайс-листы</span></button></nav></aside>
-<header class="topbar"><div class="workspace-heading"><p class="eyebrow">Рабочее пространство</p><h1 id="workspaceTitle" tabindex="-1">Большая таблица</h1><p id="workspaceSubtitle">Обновление тарифов в формате заказчика</p></div><div class="top-actions"><button aria-label="Переключить тему" class="button secondary theme-button" id="themeButton" type="button">Тёмная тема</button><button class="button secondary" id="settingsButton" type="button">Настройки</button></div></header>
+<header class="topbar"><div class="workspace-heading"><p class="eyebrow">Рабочее пространство</p><h1 id="workspaceTitle" tabindex="-1">Большая таблица</h1><p id="workspaceSubtitle">Обновление тарифов в формате заказчика</p></div><div class="top-actions"><div class="theme-selector" role="group" aria-label="Тема оформления"><button class="theme-choice" id="lightThemeButton" type="button" aria-pressed="true">Светлая</button><button class="theme-choice" id="darkThemeButton" type="button" aria-pressed="false">Тёмная</button></div><button id="themeButton" type="button" hidden>Переключить тему</button><button class="button secondary" id="settingsButton" type="button">Настройки</button></div></header>
 <main class="page"><section aria-labelledby="bulkOpenButton" class="card bulk-card workspace-panel" id="bulkPanel" role="tabpanel">
 <div class="section-head bulk-hero"><div><p class="eyebrow">Основной отчёт</p><h2 id="bulkTitle">Вся таблица. В одном формате.</h2><p>Обновите тарифы перевозчиков и получите Excel по эталону заказчика. Если онлайн-цены нет, её дополнит подтверждённый прайс-лист.</p></div><span class="format-badge">XLSX · формат эталона</span></div><div class="workflow-steps"><div><span>1</span><strong>Обновите онлайн</strong><p>Все компании и выбранный список маршрутов.</p></div><div><span>2</span><strong>Дополните прайсами</strong><p>PDF, Excel или CSV заполнят недостающие цены.</p></div><div><span>3</span><strong>Скачайте таблицу</strong><p>Маршруты, минимумы, ставки и источники.</p></div></div>
 <h3 class="block-title">Состав большой таблицы</h3><div class="filters bulk-filters">
@@ -146,7 +150,7 @@ document.querySelector('meta[name="theme-color"]').content = document.documentEl
 </details>
 </div><section aria-labelledby="documentsTab" class="workspace-panel" hidden="" id="documentsPanel" role="tabpanel">
 <div class="card"><div class="section-head"><div><p class="eyebrow">Резервный источник цен</p><h2>Прайс-листы компаний</h2><p>Загрузите один или несколько документов одной компании. Они могут содержать много маршрутов и дополнять друг друга. Проверьте распознанные цены и сохраните их — большая таблица заполнит ими пропуски онлайн-сбора.</p></div><span class="format-badge">PDF · XLSX · XLS · CSV · ZIP</span></div>
-<div class="document-fields"><label class="field"><span>Компания</span><select id="documentCompany"></select></label><label class="field"><span>Откуда</span><select id="documentOrigin"><option value="">Определить из файла</option></select></label><label class="field"><span>Дата тарифов · если известна</span><input id="documentDate" type="date"/></label></div>
+<div class="storage-info"><p id="storageInfo">Прайсы хранятся бессрочно на этом компьютере. «Отключить» убирает цены из расчётов, но сохраняет оригинал. Неподтверждённый предпросмотр действует 30 минут.</p><a class="button secondary" href="/api/storage/backup">Скачать резервную копию прайсов</a></div><div class="document-fields"><label class="field"><span>Компания</span><select id="documentCompany"></select></label><label class="field"><span>Откуда</span><select id="documentOrigin"><option value="">Определить из файла</option></select></label><label class="field"><span>Дата тарифов · если известна</span><input id="documentDate" type="date"/></label></div>
 <label class="upload-area" id="documentDropzone"><span aria-hidden="true" class="upload-icon">↑</span><strong>Выберите один или несколько прайс-листов</strong><span>или перетащите файлы сюда · до 30 файлов, всего до 20 МБ</span><input accept=".pdf,.xlsx,.xls,.csv,.zip" id="documentFile" multiple="" type="file"/><small id="documentFileName">Текстовый PDF, Excel, CSV или архив с документами</small></label>
 <div class="company-actions"><button class="button primary" id="documentParseButton" type="button">Распознать маршруты и цены</button><button class="button secondary" id="documentWorkbookButton" type="button">XLSX · диапазоны и ставки</button><button class="text-button" id="documentPointsButton" type="button">Контрольные веса · прежний шаблон</button><button class="text-button" id="documentTemplateButton" type="button">Скачать CSV-шаблон</button></div>
 <div aria-live="polite" class="form-message" id="documentMessage" role="status"></div><progress hidden="" id="documentProgress" max="100" value="0"></progress>
@@ -211,7 +215,7 @@ document.querySelector('meta[name="theme-color"]').content = document.documentEl
 </form>
 </dialog>
 <div class="toast" id="toast" role="status"></div>
-<script src="/static/workspace.js?v=501"></script>
-<script src="/static/app.js?v=501"></script>
+<script src="/static/workspace.js?v=510"></script>
+<script src="/static/app.js?v=510"></script>
 </body>
 </html>

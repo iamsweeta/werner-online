@@ -145,7 +145,7 @@ class WorkspaceDocuments(unittest.TestCase):
         with io.BytesIO(m.download(job['job_id']).read_bytes()) as buffer:
             wb=load_workbook(buffer,data_only=True)
             self.assertEqual(wb['WernerNEW']['B2'].value,'Казань');self.assertEqual(wb['WernerNEW']['N2'].value,None)
-            self.assertEqual(wb['WernerNEW']['M2'].value,1234);self.assertEqual(wb['ДЛ']['N2'].value,None)
+            self.assertIsNone(wb['WernerNEW']['M2'].value);self.assertEqual(wb['ДЛ']['N2'].value,None)
             self.assertTrue(any(r[5]=='Файл пользователя' and r[9]=='test.csv' for r in list(wb['Источники'].values)[1:]));wb.close()
         self.save(raw=csv([ROWS[0][:4]+(2222,)]));self.assertTrue(m.status()['export_outdated']);self.assertIsNone(m.status()['download_url'])
         with self.assertRaisesRegex(ValueError,'Пересоберите'):m.download(job['job_id'])

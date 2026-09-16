@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="50.1"
+VERSION="51.0"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
@@ -65,7 +65,8 @@ def root():return FileResponse(STATIC_DIR/"index.html",headers={"Cache-Control":
 
 @app.get("/health")
 def health():
-    return {"ok":True,"version":VERSION,"engine":"v50_current_documents","cities_count":len(ORIGINS),"route_selection":"any_distinct_catalog_cities","port_hint":PORT,"collect_log":str(LOG_PATH)}
+    import hashlib
+    return {"ok":True,"version":VERSION,"installation_id":hashlib.sha256(str(BASE_DIR.resolve()).encode()).hexdigest()[:16],"engine":"v51_verified_sources","cities_count":len(ORIGINS),"route_selection":"any_distinct_catalog_cities","port_hint":PORT,"collect_log":str(LOG_PATH)}
 
 @app.get("/api/options")
 def options(origin:str="Санкт-Петербург",destination:str|None=None,catalog:str="main"):
@@ -331,6 +332,20 @@ def documents_list():
     return {'files':list_files()}
 
 
+@app.get('/api/storage')
+def storage_info():
+    from .storage import summary
+    return summary()
+
+
+@app.get('/api/storage/backup')
+def storage_backup():
+    from .storage import backup
+    from starlette.background import BackgroundTask
+    path=backup()
+    return FileResponse(path,filename='tariff_documents_backup.zip',background=BackgroundTask(path.unlink,missing_ok=True))
+
+
 @app.get('/api/price-documents/template')
 def documents_template(company:str,origin:str='',kind:str='interval'):
     from .price_library import template
@@ -400,7 +415,7 @@ def diagnostics(origin:str="Санкт-Петербург",destination:str="Мо
                "source_type":x.get("source_type"),"source_url":x.get("source_url"),"refresh_status":x.get("refresh_status"),
                "refresh_error":x.get("refresh_error"),"error_info":x.get("error_info")} for x in items]
     job=COLLECT_JOBS.get(_route_key(origin,destination))
-    report={"ok":True,"version":VERSION,"engine":"v50_current_documents","route":f"{origin} → {destination}","profile":profile,
+    report={"ok":True,"version":VERSION,"engine":"v51_verified_sources","route":f"{origin} → {destination}","profile":profile,
             "summary":{"exact":len(exact),"lower_bound":len(lower),"missing":len(missing),"online_total":len(online),"online_exact":len(online_exact),"online_lower_bound":len(online_lower)},
             "exact_companies":exact,"lower_bound_companies":lower,"missing_companies":missing,"online_companies":online,"online_exact_companies":online_exact,"online_lower_bound_companies":online_lower,"live_evidence":evidence,
             "collect_job":job,"live_update_exists":lp.exists(),"live_path":str(lp),"collect_log_tail":tail,
@@ -423,7 +438,7 @@ def diagnostics(origin:str="Санкт-Петербург",destination:str="Мо
 def diagnostics_download(origin:str='Санкт-Петербург',destination:str='Москва',profile:str='w100'):
     report=diagnostics(origin,destination,profile)
     return Response(json.dumps(report,ensure_ascii=False,indent=2).encode('utf-8'),media_type='application/json',
-                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_50_1.json"'})
+                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_51_0.json"'})
 
 
 @app.get("/api/settings")
@@ -439,7 +454,7 @@ async def settings_post(request:Request):
     _save_settings(allowed); return {"ok":True}
 
 @app.get("/api/export/excel")
-def export_excel(origin:str,destination:str,profile:str="w100",companies:str|None=None,view:str="total",live_only:bool=False,include_imports:bool=True,layout:str="customer",all_loaded:bool=False):
+def export_excel(origin:str,destination:str,profile:str="w100",companies:str|None=None,view:str="total",live_only:bool=True,include_imports:bool=True,layout:str="customer",all_loaded:bool=False):
     from io import BytesIO
     from openpyxl import Workbook
     if layout not in {'customer','matrix','route'}:raise HTTPException(400,'Неизвестный формат Excel')
@@ -450,7 +465,7 @@ def export_excel(origin:str,destination:str,profile:str="w100",companies:str|Non
         content=export_bytes(origin,destination,_companies(companies),live_only=live_only,
                              include_imports=include_imports,all_loaded=all_loaded)
         return Response(content,media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        headers={"Content-Disposition":"attachment; filename=tariffs_v501_customer.xlsx"})
+                        headers={"Content-Disposition":"attachment; filename=tariffs_v510_customer.xlsx"})
     origin,destination=_validate_route(origin,destination); selected=_companies(companies); rows=matrix(origin,destination,selected); per_kg=str(view).lower()=="per_kg"
     wb=Workbook(); ws=wb.active; ws.title="Тарифы"; ws.append(["Маршрут",f"{origin} → {destination}"]); ws.append(["Версия",VERSION]); ws.append(["Режим","Расчётная стоимость: сумма отправки ÷ контрольный вес, ₽/кг; МИН — ₽" if per_kg else "Стоимость отправки, ₽"]); ws.append([])
     ws.append(["Диапазон","Тип","Ед."]+[COMPANY_LABELS[c] for c in selected])
@@ -466,11 +481,11 @@ def export_excel(origin:str,destination:str,profile:str="w100",companies:str|Non
             else:vals.append(None)
         ws.append([p["range_weight"],"Минимум" if p.get("is_minimum_profile") else "Расчётная стоимость" if per_kg else "Стоимость отправки",unit]+vals)
     audit=wb.create_sheet('Источники')
-    audit.append(['Компания','Диапазон','Источник данных','Получено / импортировано','Официальный URL','Расчёт','Ошибка онлайн-обновления','Имя файла пользователя','Дата в документе','SHA256','Страница / строка'])
+    audit.append(['Компания','Диапазон','Источник данных','Получено / импортировано','Официальный URL','Расчёт','Ошибка онлайн-обновления','Имя файла пользователя','Дата в документе','SHA256','Страница / строка','Условия НДС'])
     for row in rows:
         for item in row['items']:
             audit.append([item['company_label'],row['profile']['range_weight'],'Файл пользователя' if item.get('uploaded') else 'LIVE' if item.get('online') else 'LAST GOOD' if item.get('price') is not None else 'Нет данных',
-                          item.get('captured_at'),item.get('source_url'),item.get('calculation_basis'),item.get('refresh_error'),item.get('original_filename'),item.get('document_date'),item.get('sha256'),str(item.get('source_page') or item.get('source_row') or '')])
+                          item.get('captured_at'),item.get('source_url'),item.get('calculation_basis'),item.get('refresh_error'),item.get('original_filename'),item.get('document_date'),item.get('sha256'),str(item.get('source_page') or item.get('source_row') or ''),item.get('tax_basis') or 'Не определены; см. оригинал'])
     audit.freeze_panes='A2'
     # User-provided file names and remote error strings are text, never Excel formulas.
     for sheet in wb:
@@ -509,7 +524,7 @@ def export_excel(origin:str,destination:str,profile:str="w100",companies:str|Non
             cell.alignment=Alignment(wrap_text=True,vertical='center')
         audit.row_dimensions[1].height=42;audit.auto_filter.ref=audit.dimensions
     ws.freeze_panes="D6"; out=BytesIO(); wb.save(out); suffix="perkg" if per_kg else "total"
-    disposition=f'attachment; filename=tariffs_v501_{suffix}.xlsx'
+    disposition=f'attachment; filename=tariffs_v510_{suffix}.xlsx'
     if layout=='route':
         from urllib.parse import quote as urlquote
         stamp=datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -519,7 +534,7 @@ def export_excel(origin:str,destination:str,profile:str="w100",companies:str|Non
 
 
 @app.get('/api/export/route')
-def export_route(origin:str,destination:str,companies:str|None=None,view:str='total',live_only:bool=False,include_imports:bool=True):
+def export_route(origin:str,destination:str,companies:str|None=None,view:str='total',live_only:bool=True,include_imports:bool=True):
     """Independent file containing only this route; never the customer book."""
     return export_excel(origin,destination,companies=companies,view=view,live_only=live_only,
                         include_imports=include_imports,layout='route',all_loaded=False)

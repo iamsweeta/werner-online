@@ -1,0 +1,214 @@
+{
+  "checked_on": "2026-09-16",
+  "scope": "Один маршрут; не проверка всех 254 направлений. Лимит проверки одной компании 110 секунд.",
+  "results": [
+    {
+      "company": "КИТ",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 28,
+      "total_weight_cells": 28,
+      "status": "full",
+      "result": "КИТ: загружено диапазонов: 29",
+      "source_page": "https://tk-kit.ru/rates-new",
+      "captured_at": "2026-09-16T19:03:02+03:00",
+      "source_sha256": [
+        "5b2d623dd227287c45b4c473036fb509c297c1c8290c9942bec70b12667a622a"
+      ]
+    },
+    {
+      "company": "ДЛ",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 0,
+      "total_weight_cells": 28,
+      "status": "failed",
+      "result": "ДЛ: RuntimeError: Прайс: HTTP 401: www.dellin.ru. Калькулятор: HTTP 401: www.dellin.ru. Можно загрузить PDF/Excel перевозчика кнопкой «Загрузить прайс».",
+      "source_page": "https://www.dellin.ru/documents/",
+      "captured_at": null,
+      "source_sha256": []
+    },
+    {
+      "company": "Мейджик",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 28,
+      "total_weight_cells": 28,
+      "status": "full",
+      "result": "Мейджик: загружено диапазонов: 29",
+      "source_page": "https://magic-trans.ru/tarify/",
+      "captured_at": "2026-09-16T19:03:14+03:00",
+      "source_sha256": [
+        "b4d3e39797fc97e5158a664c3bf5bf2b70d7df6d22594db3eb6e019d0822c167"
+      ]
+    },
+    {
+      "company": "Возовоз",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 0,
+      "total_weight_cells": 28,
+      "status": "failed",
+      "result": "Возовоз: RuntimeError: Прайс: HTTP 502: vozovoz.ru. Калькулятор: HTTP 502: vozovoz.ru. Можно загрузить PDF/Excel перевозчика кнопкой «Загрузить прайс».",
+      "source_page": "https://vozovoz.ru/tariffs/",
+      "captured_at": null,
+      "source_sha256": []
+    },
+    {
+      "company": "Байкал Сервис",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 0,
+      "total_weight_cells": 28,
+      "status": "partial",
+      "result": "Байкал Сервис: загружено 1 из 28 весов; часть запросов не завершилась",
+      "source_page": "https://www.baikalsr.ru/tools/calculator/",
+      "captured_at": null,
+      "source_sha256": []
+    },
+    {
+      "company": "Пролайн",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 28,
+      "total_weight_cells": 28,
+      "status": "full",
+      "result": "Пролайн: загружено диапазонов: 28",
+      "source_page": "https://proline.su/ceny/",
+      "captured_at": "2026-09-16T19:03:44+03:00",
+      "source_sha256": [
+        "eb2a834c003fbdfe5cbdc2e0737ac70e8b2f9ba07b922a67acb7aa76f4400405",
+        "86caf381d374f5c2c7209a5479e9a3afd7a6c151629a322f72128a7d0811105a"
+      ]
+    },
+    {
+      "company": "ФастТранс",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 28,
+      "total_weight_cells": 28,
+      "status": "full",
+      "result": "ФастТранс: загружено диапазонов: 28",
+      "source_page": "https://fastrans.ru/page/price/",
+      "captured_at": "2026-09-16T19:03:54+03:00",
+      "source_sha256": [
+        "f8d92c22b7967daf5f71320b0898116cedab75a7fa53e67d6419983c0b35ccef"
+      ]
+    },
+    {
+      "company": "Главтрасса",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 9,
+      "total_weight_cells": 28,
+      "status": "partial",
+      "result": "Главтрасса: загружено 26 из 28 весов; часть запросов не завершилась",
+      "source_page": "https://glavtrassa.ru/clients/prices/",
+      "captured_at": "2026-09-16T19:03:44+03:00",
+      "source_sha256": []
+    },
+    {
+      "company": "Рейл Континент",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 0,
+      "total_weight_cells": 28,
+      "status": "failed",
+      "result": "Рейл Континент: RuntimeError: Загрузка частями: HTTP 502: сервер не подтвердил загрузку частями; целиком: HTTP 502: www.railcontinent.ru",
+      "source_page": "https://www.railcontinent.ru/filials/moskva/",
+      "captured_at": null,
+      "source_sha256": []
+    },
+    {
+      "company": "АТЭК",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 28,
+      "total_weight_cells": 28,
+      "status": "full",
+      "result": "АТЭК: загружено диапазонов: 28",
+      "source_page": "https://atec-logistic.ru/tariffs/",
+      "captured_at": "2026-09-16T19:04:20+03:00",
+      "source_sha256": [
+        "e42ae76a35a07fd2a1cd98a112a3a73ca3e64fa5f681d8eb5205db55fa1311bf"
+      ]
+    },
+    {
+      "company": "БСК",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 28,
+      "total_weight_cells": 28,
+      "status": "full",
+      "result": "БСК: загружено диапазонов: 29",
+      "source_page": "https://123789.ru/prices",
+      "captured_at": "2026-09-16T19:04:27+03:00",
+      "source_sha256": [
+        "0cf07971765b5feaf315b6d48faf768119dc76343f80b4c694c025e70bc7a00c"
+      ]
+    },
+    {
+      "company": "ЭкспедицияПлюс",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 28,
+      "total_weight_cells": 28,
+      "status": "full",
+      "result": "ЭкспедицияПлюс: загружено диапазонов: 29",
+      "source_page": "https://nevatk.ru/tarif/",
+      "captured_at": "2026-09-16T19:04:40+03:00",
+      "source_sha256": [
+        "3aa92c95ba9bf0127bacccde4fad4a85270cd261b4acff28b8254d896bf927a7"
+      ]
+    },
+    {
+      "company": "Werner",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 0,
+      "total_weight_cells": 28,
+      "status": "failed",
+      "result": "Проверка превысила 110 секунд",
+      "source_page": "https://wernerus.ru/clients/prices/",
+      "captured_at": null,
+      "source_sha256": []
+    },
+    {
+      "company": "ПЭК",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 0,
+      "total_weight_cells": 28,
+      "status": "failed",
+      "result": "Проверка превысила 110 секунд",
+      "source_page": "https://pecom.ru/business/rates/trucking/",
+      "captured_at": null,
+      "source_sha256": []
+    },
+    {
+      "company": "CTSgroup",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 28,
+      "total_weight_cells": 28,
+      "status": "full",
+      "result": "CTSGroup: загружено 29 диапазонов",
+      "source_page": "https://cts-group.ru/prices",
+      "captured_at": "2026-09-16T19:04:46+03:00",
+      "source_sha256": [
+        "3222154b40d286ce70bd20eef32e6b5109490f5cf2f6c5f1c2c8820d0ed930ab"
+      ]
+    },
+    {
+      "company": "Новая Линия",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 26,
+      "total_weight_cells": 28,
+      "status": "partial",
+      "result": "Новая Линия: загружено 27 диапазонов из NL-6e57637de6f9e8caf3a9a7b2, строка Санкт-Петербург (v42_requests-tls12)",
+      "source_page": "https://tknl.ru/price/",
+      "captured_at": "2026-09-16T19:04:59+03:00",
+      "source_sha256": [
+        "02a6ea1a4dbec53e56252e780c832d1a04fdec8a62fe845b4db5cd71dce8cec2"
+      ]
+    },
+    {
+      "company": "Фортуна",
+      "route": "Москва → Санкт-Петербург",
+      "published_weight_cells": 28,
+      "total_weight_cells": 28,
+      "status": "full",
+      "result": "Фортуна: загружено диапазонов: 29",
+      "source_page": "https://fte.ru/price/",
+      "captured_at": "2026-09-16T19:05:07+03:00",
+      "source_sha256": [
+        "815fd3ee2e53c124849fae486a07754f213d9677309f0bc466abcb2fdc22fe5c"
+      ]
+    }
+  ]
+}

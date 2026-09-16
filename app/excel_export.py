@@ -93,13 +93,20 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
     else:
         with e.STATE_LOCK:
             snapshot={route:e.matrix(*route,list(e.COMPANIES)) for route in routes}
+            if include_imports:
+                from .bulk_refresh import fill_document_gaps
+                from .document_imports import pack
+                for route,rows in snapshot.items():
+                    for row in rows:
+                        for item in row['items']:item['collected_online']=bool(item.get('online'))
+                    snapshot[route]=fill_document_gaps(rows,pack(*route),*route)
         data=snapshot.items()
     values={}
     counts={'online':0,'document':0,'missing':0}
     audit=wb.create_sheet('Источники')
     audit.append(['Компания','Откуда','Куда','Диапазон','Стоимость отправки, ₽','Статус',
                   'Получено','Официальный URL','Расчёт','Файл пользователя','Дата документа',
-                  'SHA256','Страница / строка','Причина отсутствия / ошибка','Опубликованная ставка, ₽/кг','Минимальная плата, ₽'])
+                  'SHA256','Страница / строка','Причина отсутствия / ошибка','Опубликованная ставка, ₽/кг','Минимальная плата, ₽','Условия НДС'])
     for route, rows in data:
         audit_groups={}
         for row in rows:
@@ -121,7 +128,7 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
                               item.get('original_filename'),item.get('document_date'),item.get('sha256'),
                               str(item.get('source_page') or item.get('source_row') or ''),
                               item.get('refresh_error') or ('Источник даёт сумму отправки; ставка за кг не опубликована' if is_rate_profile(p) and item.get('comparison_value') is not None and tariff_value(item,p) is None else item.get('message') if item.get('price') is None else ''),
-                              item.get('published_rate_per_kg') if allowed else None,item.get('minimum_charge') if allowed else None]
+                              item.get('published_rate_per_kg') if allowed else None,item.get('minimum_charge') if allowed else None,item.get('tax_basis') or 'Не определены; см. оригинал']
                 if collection_info:
                     record[6]=record[6] or item.get('checked_at')
                     key=tuple(str(v or '') for i,v in enumerate(record) if i not in (3,4))
@@ -255,7 +262,7 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
         for cell in row:
             if cell.data_type=='f':cell.data_type='s'
     for col in ['A','B','C','D','F','G']:audit.column_dimensions[col].width=24
-    for col,width in [('J',38),('K',20),('L',26),('M',18),('N',65),('G',32)]:audit.column_dimensions[col].width=width
+    for col,width in [('J',38),('K',20),('L',26),('M',18),('N',65),('G',32),('Q',40)]:audit.column_dimensions[col].width=width
     audit.row_dimensions[1].height=44
     audit.column_dimensions['H'].width=50;audit.column_dimensions['I'].width=70
     if collection_info:

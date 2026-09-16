@@ -41,13 +41,14 @@ class ImportLifecycle(unittest.TestCase):
         for company,route in [('Мейджик',ROUTE),('Werner',ROUTE[::-1]),('Werner',('Казань','Самара'))]:self.assertIsNone(self.quote(company,route)['price'])
         engine._cached_json.cache_clear();self.assertEqual(self.quote()['price'],1234)
         self.assertEqual(self.client.get('/api/import-file/'+q['source_file']).content,raw)
-        # Updating online evidence cannot relabel/overwrite the imported row.
+        # Fresh online evidence wins without changing the stored user document.
         aid=engine.begin_live_attempt('Werner',*ROUTE)
         engine.save_live_update('Werner',*ROUTE,{'w100':{'kind':'exact','price':2000}}, {'origin':ROUTE[0],'destination':ROUTE[1]},aid)
         engine.finish_live_attempt('Werner',*ROUTE,aid,rows=1)
-        self.assertEqual(self.quote()['price'],1234);self.assertFalse(self.quote()['online'])
+        self.assertEqual(self.quote()['price'],2000);self.assertTrue(self.quote()['online'])
         result=self.client.get('/api/compare',params={'origin':ROUTE[0],'destination':ROUTE[1],'companies':'Werner'}).json()
-        self.assertEqual(result['online_count'],0);self.assertEqual(result['last_good_count'],0);self.assertEqual(result['imported_count'],1)
+        self.assertEqual(result['online_count'],1);self.assertEqual(result['last_good_count'],0);self.assertEqual(result['imported_count'],0)
+        self.assertEqual(imports.pack(*ROUTE)['profiles']['w100']['Werner']['price'],1234)
         self.assertEqual(self.client.delete('/api/import',params={'company':'Werner','origin':ROUTE[0],'destination':ROUTE[1]}).status_code,200)
         self.assertEqual(self.quote()['price'],2000);self.assertTrue(self.quote()['online'])
     def test_replacement_removes_previous_imported_weights(self):

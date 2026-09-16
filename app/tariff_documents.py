@@ -381,6 +381,13 @@ def parse_generic_pdf(raw, company, origin, destination):
 
 
 def parse_document(raw, filename, company, origin, destination):
+    values,meta=_parse_document(raw,filename,company,origin,destination)
+    from .source_conditions import document_conditions
+    conditions=document_conditions(raw,PurePosixPath(filename).suffix)
+    return values,{**conditions,**{k:v for k,v in meta.items() if v is not None or k not in conditions}}
+
+
+def _parse_document(raw, filename, company, origin, destination):
     ext=validate_file(raw,filename)
     if company not in COMPANIES:raise ValueError('Выберите компанию из списка')
     if ext=='.zip':

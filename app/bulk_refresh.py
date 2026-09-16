@@ -128,9 +128,10 @@ class BulkManager:
             # never remain downloadable after the comparison semantics change.
             for job in db.execute('SELECT id,config FROM jobs').fetchall():
                 config=json.loads(job['config'])
-                if config.get('tariff_schema')==50:continue
-                config.update(companies=[c for c in config['companies'] if c in e.COMPANIES],tariff_schema=50)
-                for result in db.execute('SELECT idx,company,payload FROM results WHERE job=?',(job['id'],)).fetchall():
+                if config.get('tariff_schema')==51:continue
+                convert_weights=config.get('tariff_schema')!=50
+                config.update(companies=[c for c in config['companies'] if c in e.COMPANIES],tariff_schema=51)
+                for result in (db.execute('SELECT idx,company,payload FROM results WHERE job=?',(job['id'],)).fetchall() if convert_weights else []):
                     if result['company'] not in e.COMPANIES:
                         db.execute('DELETE FROM results WHERE job=? AND idx=? AND company=?',(job['id'],result['idx'],result['company']));continue
                     payload=json.loads(zlib.decompress(result['payload']))
@@ -192,7 +193,7 @@ class BulkManager:
             if self.active() or self.route_busy():raise BusyError('Дождитесь текущего обновления или приостановите общий сбор')
             if self.export_worker and self.export_worker.is_alive():raise BusyError('Дождитесь завершения создания Excel')
             ident='bulk-'+uuid.uuid4().hex
-            config={'scope':scope,'origins':origins,'destinations':destinations,'companies':list(e.COMPANIES),'tariff_schema':50,
+            config={'scope':scope,'origins':origins,'destinations':destinations,'companies':list(e.COMPANIES),'tariff_schema':51,
                     'mode':mode,'include_imports':bool(include_imports)}
             with self.db() as db:
                 db.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?)',
@@ -236,6 +237,10 @@ class BulkManager:
             db.execute('UPDATE jobs SET updated_at=? WHERE id=?',(now(),ident))
 
     def _run(self,ident):
+        from .document_cache import session
+        with session():self._run_with_documents(ident)
+
+    def _run_with_documents(self,ident):
         from .v42_collectors import collect_selected
         collector=self.collector or collect_selected
         try:
@@ -306,6 +311,15 @@ class BulkManager:
                     item['online']=bool(item.get('collected_online') and e.age_seconds(item.get('captured_at'))<e.LIVE_TTL_SECONDS)
                 items.append(item)
             output.append({'profile':deepcopy(p),'items':items})
+        # Old jobs may contain a "minimum" derived from one heavy quote.
+        first=next(r for r in output if r['profile']['id']=='w001')
+        minimum=next(r for r in output if r['profile']['id']=='min')
+        for pos,item in enumerate(minimum['items']):
+            if (item.get('minimum_basis')=='lowest_available_shipment'
+                and item.get('minimum_source_profile') not in {'min','w001'}
+                and first['items'][pos].get('comparison_value') is None):
+                minimum['items'][pos]={**item,'price':None,'comparison_value':None,'tariff_value':None,
+                    'online':False,'collected_online':False,'message':'Минимум не подтверждён: нужен первый весовой диапазон или опубликованный минимум.'}
         if imports is not None:
             output=fill_document_gaps(output,imports,o,d)
         return output
@@ -415,15 +429,19 @@ def fill_document_gaps(rows,imports,origin,destination):
     minimum=next(r for r in rows if r['profile']['id']=='min')
     for pos,item in enumerate(minimum['items']):
         company=item['company']
-        candidates=[r['items'][pos] for r in rows if r['profile']['id']!='min' and r['items'][pos].get('comparison_value') is not None]
-        if item.get('price') is not None:candidates.append(item)
+        candidates=[r['items'][pos] for r in rows if r['profile']['id']!='min' and r['items'][pos].get('comparison_value') is not None and not r['items'][pos].get('price_is_minimum')]
+        if item.get('comparison_value') is not None and not item.get('price_is_minimum'):candidates.append(item)
         explicit=imports.get('profiles',{}).get('min',{}).get(company)
         if explicit and not item.get('collected_online'):
             candidates.append(e._route_quote(company,origin,destination,'min',({}, {}, imports),derive_minimum=False))
-        if candidates:
-            chosen=min(candidates,key=lambda x:x['price'])
+        pools=([c for c in candidates if c.get('collected_online')],
+               [c for c in candidates if c.get('uploaded')],
+               [c for c in candidates if not c.get('collected_online') and not c.get('uploaded')])
+        pool=next((group for group in pools if any(c.get('profile_id') in {'min','w001'} for c in group)),[])
+        if pool:
+            chosen=min(pool,key=lambda x:x['price'])
             minimum['items'][pos]={**chosen,'profile_id':'min','comparison_value':chosen['price'],
                 'tariff_value':chosen['price'],'tariff_unit':'₽',
                 'effective_rate_per_kg':None,'published_rate_per_kg':None,'minimum_source_profile':chosen['profile_id'],
-                'minimum_basis':'lowest_available_shipment','price_is_minimum':False}
+                'minimum_basis':'published_or_first_weight','price_is_minimum':False}
     return rows

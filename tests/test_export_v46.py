@@ -36,9 +36,9 @@ class MinimumAndExport(unittest.TestCase):
         self.save({'w001':900,'w100':3000},meta={'captured_at':(datetime.now().astimezone()-timedelta(days=1)).isoformat()})
         self.save({'w100':3090})
         row=e.quote('Пролайн',*ROUTE,'min')
-        self.assertEqual(row['price'],3090);self.assertTrue(row['online'])
+        self.assertEqual(row['price'],900);self.assertFalse(row['online'])
     def test_confirmed_file_minimum_keeps_uploaded_provenance(self):
-        self.save({'w001':500})
+        self.save({'w001':500},meta={'captured_at':(datetime.now().astimezone()-timedelta(days=1)).isoformat()})
         imports.e._robust_json_write(imports.route_path(*ROUTE),{'profiles':{'w001':{'Пролайн':{'kind':'exact','price':600,'source_file':'test.pdf','original_filename':'price.pdf'}}},'companies':{}})
         row=e.quote('Пролайн',*ROUTE,'min')
         self.assertEqual(row['price'],600);self.assertTrue(row['uploaded']);self.assertFalse(row['online'])

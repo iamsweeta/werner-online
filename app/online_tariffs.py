@@ -79,6 +79,12 @@ def values_from_tiers(tiers, *, fixed=(), minimum=None):
 def fetch(company, origin, destination, url, fmt='HTML', referer=None, *, prefer_ranges=False):
     from pathlib import Path
     from .v42_collectors import _bounded_source_download
+    from . import document_cache
+    key=(company,origin,url,fmt,referer)
+    cached=document_cache.get(key)
+    if cached:
+        raw,meta=cached
+        return raw,{**meta,'origin':origin,'destination':destination}
     ident = hashlib.sha256(f'{company}|{origin}|{destination}|{url}'.encode()).hexdigest()[:16]
     source = {'id': 'LIVE-' + ident, 'company': company, 'block_title': 'official',
               'url': url, 'reference_url': referer or url, 'document_format': fmt,'prefer_ranges':prefer_ranges,
@@ -98,6 +104,9 @@ def fetch(company, origin, destination, url, fmt='HTML', referer=None, *, prefer
             'captured_at': datetime.now().astimezone().isoformat(timespec='seconds'),
             'source_type': f'Официальный прайс {company}', 'transport': result.get('connector'),
             'calculation_basis': 'Опубликованный тариф по весу; объём и дополнительные услуги не включены'}
+    from .source_conditions import document_conditions
+    meta.update(document_conditions(raw,fmt))
+    document_cache.put(key,raw,meta)
     return raw, meta
 
 

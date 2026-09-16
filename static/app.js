@@ -116,12 +116,13 @@ function sourceBlock(item){
   const hasData=numeric(item?.comparison_value)||(item?.price_is_minimum&&numeric(item?.price));
   const mode=item?.uploaded?'ФАЙЛ ПОЛЬЗОВАТЕЛЯ':item?.online?'LIVE':(hasData?'LAST GOOD':(item?.refresh_status==='failed'?'FAILED':'НЕ ЗАГРУЖЕНО'));
   const file=item?.source_file?`<a href="${item.uploaded?'/api/import-file/':'/api/source-file/'}${encodeURIComponent(item.source_file)}" target="_blank" rel="noopener">${item.uploaded?escapeHtml(item.original_filename||'Загруженный документ'):'Скачанный прайс'}</a>`:'';
+  const taxes=item?.tax_basis?`<span>${escapeHtml(item.tax_basis)}</span>`:'';
   const basis=item?.calculation_basis?`<span>${escapeHtml(item.calculation_basis)}</span>`:'';
   const error=item?.refresh_error?errorBlock(item.error_info,item.refresh_error):'';
   const documentDate=item?.uploaded?`<span>Дата в документе: ${escapeHtml(item.document_date||'не распознана')}</span>`:'';
   const time=item?.captured_at?` · ${escapeHtml(item.captured_at)}`:'';
   const transport=item?.origin_terminal?` · Терминал отправления: ${escapeHtml(item.origin_terminal)}`:'';
-  return `<div class="source-block"><strong>${escapeHtml(item?.source_type||'Источник')}</strong><span><b>${escapeHtml(mode)}</b>${time}${transport}${note?` · ${escapeHtml(note)}`:''}</span>${url?`<a href="${escapeHtml(url)}" target="_blank" rel="noopener">Открыть источник</a>`:''}${file}${documentDate}${basis}${error}</div>`;
+  return `<div class="source-block"><strong>${escapeHtml(item?.source_type||'Источник')}</strong><span><b>${escapeHtml(mode)}</b>${time}${transport}${note?` · ${escapeHtml(note)}`:''}</span>${url?`<a href="${escapeHtml(url)}" target="_blank" rel="noopener">Открыть источник</a>`:''}${file}${documentDate}${taxes}${basis}${error}</div>`;
 }
 
 function graphColor(index){ const light=['#007565','#896000','#3457c4','#ab326f','#067699','#7046bd','#248443','#af5317','#816900','#007e88','#1e795d','#8750a7','#b23f43','#336db0','#567a09','#865baa','#b63c72','#157b73','#996327','#515ba3','#4c596a']; const palette=document.documentElement.dataset.theme==='dark'?['#46F0D2','#FBE2B4','#8BA4FF','#F59AC8','#7DD3FC','#C4B5FD','#86EFAC','#FDBA74','#FDE047','#67E8F9','#A7F3D0','#D8B4FE','#FCA5A5','#93C5FD','#BEF264','#E9D5FF','#F9A8D4','#99F6E4','#FED7AA','#C7D2FE','#E5E7EB']:light; return palette[index % palette.length]; }
@@ -521,7 +522,16 @@ $('importApplyButton').addEventListener('click',applyImport);
 $('importRemoveButton').addEventListener('click',removeImport);
 $('importTemplateButton').addEventListener('click',()=>{window.location.href='/api/import/template?'+new URLSearchParams({...importsState.route,company:$('importCompany').value});});
 async function saveSettings(){ const map={dellin_appkey:'dellinAppKey',vozovoz_api_key:'vozovozKey',baikal_api_key:'baikalApiKey',baikal_api_url:'baikalApiUrl'}; const payload={public_browser_enabled:$('browserCalculatorsToggle').checked}; Object.entries(map).forEach(([k,id])=>{const v=$(id).value.trim();if(v)payload[k]=v;}); if(!Object.keys(payload).length){$('settingsMessage').textContent='Введите хотя бы одно значение.';return;} try{await getJSON('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});$('settingsMessage').textContent='Сохранено локально.';setTimeout(closeSettings,500);}catch(e){$('settingsMessage').textContent=e.message;} }
-function toggleTheme(){const next=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=next;try{localStorage.setItem('tariff-theme-v501',next);}catch{}if(typeof updateThemeButton==='function')updateThemeButton();if(state.matrix)renderTariffGraph(state.matrix);}
+function setTheme(next){
+  next=next==='dark'?'dark':'light';
+  document.documentElement.dataset.theme=next;
+  document.documentElement.style.colorScheme=next==='dark'?'dark':'only light';
+  try{localStorage.setItem('tariff-theme-v51',next);}catch{}
+  const url=new URL(location.href);if(url.searchParams.has('theme')){url.searchParams.delete('theme');history.replaceState(null,'',url);}
+  if(typeof updateThemeButton==='function')updateThemeButton();
+  if(state.matrix)renderTariffGraph(state.matrix);
+}
+function toggleTheme(){setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');}
 async function init(){ if(typeof updateThemeButton==='function')updateThemeButton(); state.unitMode=localStorage.getItem('tariff-unit-mode-v50')==='per_kg'?'per_kg':'total'; const sourceMode=localStorage.getItem('tariff-source-mode-v450')||'mixed'; state.liveOnly=sourceMode!=='all'; state.includeImports=sourceMode!=='live'; if($('unitModeSelect')) $('unitModeSelect').value=state.unitMode; if($('liveModeSelect')) $('liveModeSelect').value=sourceMode; updateUnitLabels(); let route={origin:'Санкт-Петербург',destination:'Москва'}; try{route={...route,...JSON.parse(localStorage.getItem('tariff-route-v44')||'{}')};}catch{} try{await loadOptions(route.origin,route.destination);}catch{await loadOptions('Санкт-Петербург','Москва');} $('profileSelect').value='w100'; await compare(); state.autoRefresh=localStorage.getItem('tariff-auto-refresh-v424')!=='0'; $('autoRefreshToggle').checked=state.autoRefresh; if(typeof initWorkspace==='function')initWorkspace(); initBulk(); resumeRefresh().catch(e=>toast(e.message)); }
 
 
@@ -553,3 +563,6 @@ $('extendedRoutesToggle')?.addEventListener('change',async()=>{
   try{await loadOptions(expanded?$('originSelect').value:'Москва',expanded?$('destinationSelect').value:'Санкт-Петербург');await compare();}
   catch(e){toast(e.message);}
 });
+
+$('lightThemeButton').addEventListener('click',()=>setTheme('light'));
+$('darkThemeButton').addEventListener('click',()=>setTheme('dark'));

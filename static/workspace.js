@@ -16,6 +16,8 @@ function setWorkspace(name,{focus=false}={}){
 }
 function updateThemeButton(){
   const dark=document.documentElement.dataset.theme==='dark';
+  wsEl('lightThemeButton')?.setAttribute('aria-pressed',String(!dark));
+  wsEl('darkThemeButton')?.setAttribute('aria-pressed',String(dark));
   wsEl('themeButton').textContent=dark?'Светлая тема':'Тёмная тема';
   wsEl('themeButton').setAttribute('aria-label',dark?'Включить светлую тему':'Включить тёмную тему');
   document.querySelector('meta[name=theme-color]').content=dark?'#090a0c':'#ffffff';
@@ -27,6 +29,7 @@ async function initWorkspace(){
   documentGuide();updateThemeButton();
   setWorkspace(localStorage.getItem('tariff-workspace-v48')||'bulk');
   await refreshDocuments();
+  getJSON('/api/storage').then(info=>{if(wsEl('storageInfo'))wsEl('storageInfo').textContent=`${info.files} оригиналов · ${(info.bytes/1024/1024).toFixed(1)} МБ. ${info.confirmed_retention} ${info.disabled_retention} Предпросмотр действует 30 минут. Папка: ${info.location}`;}).catch(()=>{});
 }
 function documentGuide(){
   const guide=state.options?.import_guide?.[wsEl('documentCompany').value];

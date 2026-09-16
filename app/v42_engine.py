@@ -199,11 +199,16 @@ def save_live_update(company: str, origin: str, destination: str, profile_values
             price=item['price']
             if isinstance(price,bool) or not isinstance(price,(int,float)) or not math.isfinite(price) or price<=0:
                 raise ValueError(f'Некорректная цена {company}, {pid}')
+            document_date=item.get('document_date') or meta.get('document_date')
+            if document_date:
+                from datetime import date
+                if date.fromisoformat(document_date)>date.today():
+                    raise ValueError('Источник содержит будущие тарифы; текущая цена не заменена')
             row={**item,
                  "attempt_id":aid,"captured_at":item.get("captured_at") or captured_at,"data_origin":"online",
                  "source_type":item.get("source_type") or meta.get("source_type"),"source_url":item.get("source_url") or meta.get("source_url"),
                  "destination_variant":item.get("destination_variant") or meta.get("destination_variant"),"transport":item.get("transport") or meta.get("transport") or meta.get("browser")}
-            row.update({k: item.get(k,meta.get(k)) for k in ('source_file','sha256','calculation_basis','volume_m3','document_date','source_page','source_row')})
+            row.update({k: item.get(k,meta.get(k)) for k in ('source_file','sha256','calculation_basis','volume_m3','document_date','source_page','source_row','tax_basis')})
             live.setdefault("profiles",{}).setdefault(pid,{})[company]=row
         company_meta.update({k:v for k,v in meta.items() if v is not None})
         company_meta.update({"current_attempt_id":aid,"last_success_at":captured_at,"data_origin":"online"})
@@ -242,14 +247,16 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
         packs = (base_pack, live, imports)
         candidates = [_route_quote(company, o, d, p['id'], packs, derive_minimum=False)
                       for p in COMMON_PROFILES]
-        candidates = [x for x in candidates if isinstance(x.get('price'), (int, float))
+        candidates = [x for x in candidates if x.get('comparison_value') is not None
+                      and not x.get('price_is_minimum') and isinstance(x.get('price'), (int, float))
                       and math.isfinite(x['price']) and x['price'] > 0]
-        # A user document is authoritative until removed. Never use an older
-        # archive to reduce a current LIVE minimum or a confirmed import.
-        for source in ('uploaded', 'online', 'last_good'):
+        # A 100 kg quote alone cannot prove a carrier's smallest shipment price.
+        # Require its explicit minimum or the first comparison weight (0–1 kg).
+        for source in ('online', 'uploaded', 'last_good'):
             pool = [x for x in candidates if x.get('uploaded')] if source == 'uploaded' else (
-                [x for x in candidates if x.get('online')] if source == 'online' else candidates)
-            if not pool:
+                [x for x in candidates if x.get('online')] if source == 'online' else
+                [x for x in candidates if not x.get('online') and not x.get('uploaded')])
+            if not any(x['profile_id'] in {'min','w001'} for x in pool):
                 continue
             chosen = min(pool, key=lambda x: x['price'])
             value = float(chosen['price'])
@@ -258,7 +265,7 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
                     'published_rate_per_kg': None, 'minimum_charge': value,
                     'tariff_value':value,'tariff_unit':'₽',
                     'minimum_source_profile': chosen['profile_id'],
-                    'minimum_basis': 'lowest_available_shipment',
+                    'minimum_basis': 'published_or_first_weight',
                     'display_text': f'{value:g} ₽',
                     'message': 'Минимальная стоимость среди загруженных тарифов компании '
                                f'для {o} → {d}. ' + chosen.get('message', '')}
@@ -267,7 +274,15 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
     base_item=((base_pack.get("profiles") or {}).get(profile_id) or {}).get(company,{"kind":"missing","price":None}) or {}
     live_item=((live.get("profiles") or {}).get(profile_id) or {}).get(company)
     uploaded_item=((imports.get('profiles') or {}).get(profile_id) or {}).get(company)
-    uploaded=bool(uploaded_item)
+    live_current=bool(isinstance(live_item,dict) and live_item.get('kind')=='exact'
+                      and live_item.get('price') is not None and live_item.get('attempt_id')
+                      and live_item.get('attempt_id')==company_live.get('current_attempt_id')
+                      and company_live.get('attempt_status') in {'success','partial'}
+                      and age_seconds(live_item.get('captured_at'))<LIVE_TTL_SECONDS
+                      and profile_id not in (company_live.get('unavailable_profiles') or {}))
+    # Same policy in the route view and bulk export: current exact online
+    # evidence first, confirmed documents for the remaining weights.
+    uploaded=bool(uploaded_item) and not live_current
     unavailable = (company_live.get('unavailable_profiles') or {}).get(profile_id) if not uploaded else None
     use_live=isinstance(live_item,dict) and live_item.get("kind") in {"exact","lower_bound"} and live_item.get("price") is not None
     item=uploaded_item if uploaded else live_item if use_live else base_item
@@ -300,7 +315,7 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
     base={
         "company":company,"company_label":COMPANY_LABELS.get(company,company),"comparison_unit":"₽",
         "source_type":source_type or "Официальный источник","source_url":source_url,"captured_at":captured_at,
-        "pricing_engine":"v50_current_documents","profile_id":profile_id,"destination_variant":destination_variant,"origin_terminal":item.get("origin_terminal") if uploaded else company_live.get("origin_terminal") if use_live else None,
+        "pricing_engine":"v51_verified_sources","profile_id":profile_id,"destination_variant":destination_variant,"origin_terminal":item.get("origin_terminal") if uploaded else company_live.get("origin_terminal") if use_live else None,
         "data_origin":data_origin,"online":online,"freshness":freshness,"uploaded":uploaded,
         "live_attempt_id":row_attempt if use_live else None,"transport":item.get("transport") if use_live else None,
         "refresh_status":current_status or "not_run","refresh_attempted_at":company_live.get("last_attempt_at"),
@@ -308,7 +323,7 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
         "error_info":explain_error(company_live["last_error"]) if company_live.get("last_error") else None,
         "source_file":item.get('source_file') if use_live or uploaded else None,
         "sha256":item.get('sha256') if use_live or uploaded else None,
-        **{k:item.get(k) for k in ('original_filename','uploaded_at','document_date','source_page','source_pages','source_row','archive_member','tariff_kind','weight_from','weight_to')},
+        **{k:item.get(k) for k in ('original_filename','uploaded_at','document_date','source_page','source_pages','source_row','archive_member','tariff_kind','weight_from','weight_to','tax_basis')},
         "calculation_basis":item.get('calculation_basis') or 'Опубликованный тариф по весу; объём и дополнительные услуги не включены',
         "volume_m3":item.get('volume_m3'),
     }
