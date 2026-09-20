@@ -88,7 +88,7 @@ function setAllCompanies(on){ state.calculationCompanies.clear(); if(on)(state.o
 
 function visiblePrice(item){return !state.liveOnly || item?.online || (state.includeImports && item?.uploaded);}
 function statusLabel(item){
-  if(item?.uploaded)return 'Файл пользователя';
+  if(item?.uploaded)return item.document_selected?'Выбранный файл':'Файл пользователя';
   if(item?.online) return item?.price_is_minimum?'Обновлено · цена «от»':'Обновлено · LIVE';
   if(item?.refresh_status==='unavailable' && item?.status!=='ok') return 'Прайс маршрута не опубликован';
   const failed=item?.refresh_status==='failed';
@@ -262,6 +262,7 @@ async function compare(){
     if(seq!==state.compareSeq) return;
     if($('originSelect').value!==origin || $('destinationSelect').value!==destination || $('profileSelect').value!==profile) return;
     renderComparison(cmp); renderMatrix(matrix); renderTariffGraph(matrix);
+    if(typeof refreshRouteDocuments==='function')refreshRouteDocuments(origin,destination);
   }catch(e){
     if(e?.name!=='AbortError' && seq===state.compareSeq) toast(e.message||'Ошибка расчёта');
   }finally{
@@ -445,7 +446,7 @@ function showCurrentImport(){
   const saved=importsState.companies[$('importCompany').value];
   const guide=state.options?.import_guide?.[$('importCompany').value];
   $('importCompanyGuide').innerHTML=guide?`<a href="${escapeHtml(guide.page_url)}" target="_blank" rel="noopener">Где скачать прайс ${escapeHtml($('importCompany').value)}</a><span>${escapeHtml(guide.instruction)}</span>`:'';
-  $('importCurrent').textContent=saved?`Сейчас используется: ${saved.original_filename}. Импортирован: ${saved.uploaded_at}. Дата в документе: ${saved.document_date||'не распознана'}.`:'Для этой компании и направления пользовательский файл ещё не применён.';
+  $('importCurrent').textContent=saved?`Документ в библиотеке: ${saved.original_filename}. Импортирован: ${saved.uploaded_at}. Дата в документе: ${saved.document_date||'не распознана'}.`:'Для этой компании и направления пользовательский файл ещё не применён.';
   $('importRemoveButton').hidden=!saved;
 }
 async function openImport(){
@@ -495,6 +496,7 @@ async function applyImport(){
     // Make the explicitly applied document visible immediately, including export.
     state.liveOnly=false;state.includeImports=true;$('liveModeSelect').value='all';
     await loadOptions(data.origin,data.destination);await compare();
+    if(typeof refreshDocuments==='function'){await refreshDocuments();await refreshBulkAfterDocuments();}
   }catch(e){$('importMessage').textContent=e.message;}
   finally{importBusy(false);}
 }

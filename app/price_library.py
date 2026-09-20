@@ -9,6 +9,7 @@ from . import tariff_documents as t
 from .cities import city_names,city_pattern
 
 JOBS={};LOCK=threading.RLock();MAX_ROUTES=2000
+_MIGRATED=set()
 
 
 def root():return e.RUNTIME_DIR/'imports'
@@ -23,7 +24,9 @@ def db():
             conn.executescript('''CREATE TABLE IF NOT EXISTS files(id TEXT PRIMARY KEY,company TEXT,meta TEXT,active INTEGER);
               CREATE TABLE IF NOT EXISTS prices(file TEXT,origin TEXT,destination TEXT,profile TEXT,payload TEXT,PRIMARY KEY(file,origin,destination,profile));
               CREATE INDEX IF NOT EXISTS document_route ON prices(origin,destination);
-              CREATE TABLE IF NOT EXISTS excluded(company TEXT,origin TEXT,destination TEXT,PRIMARY KEY(company,origin,destination));''')
+              CREATE TABLE IF NOT EXISTS excluded(company TEXT,origin TEXT,destination TEXT,PRIMARY KEY(company,origin,destination));
+              CREATE TABLE IF NOT EXISTS route_documents(company TEXT,origin TEXT,destination TEXT,file TEXT,
+                PRIMARY KEY(company,origin,destination));''')
             yield conn
     finally:conn.close()
 
@@ -34,22 +37,117 @@ def _id(value):
 
 
 def pack(origin,destination):
+    origin,destination=e.route_pair(origin,destination)
+    migrate_legacy(origin,destination)
     if not (root()/'documents.sqlite3').exists():return {'profiles':{},'companies':{}}
     with db() as conn:
-        rows=conn.execute('''SELECT f.company,f.meta,f.active,p.profile,p.payload FROM prices p JOIN files f ON f.id=p.file
-          WHERE p.origin=? AND p.destination=?
-          AND NOT EXISTS (SELECT 1 FROM prices newer JOIN files nf ON nf.id=newer.file
-            WHERE newer.origin=p.origin AND newer.destination=p.destination AND nf.company=f.company AND nf.rowid>f.rowid)
-          AND NOT EXISTS
-          (SELECT 1 FROM excluded x WHERE x.company=f.company AND x.origin=p.origin AND x.destination=p.destination)
-          ORDER BY f.rowid''',(origin,destination)).fetchall()
-    out={'profiles':{},'companies':{}}
+        rows=conn.execute('''SELECT f.id,f.rowid AS sequence,f.company,f.meta,f.active,p.profile,p.payload
+          FROM prices p JOIN files f ON f.id=p.file WHERE p.origin=? AND p.destination=? ORDER BY f.rowid''',(origin,destination)).fetchall()
+        choices=dict(conn.execute('SELECT company,file FROM route_documents WHERE origin=? AND destination=?',(origin,destination)))
+        excluded={r[0] for r in conn.execute('SELECT company FROM excluded WHERE origin=? AND destination=?',(origin,destination))}
+    out={'profiles':{},'companies':{},'_known_source_files':[]};documents={}
     for row in rows:
         meta=json.loads(row['meta']);value=json.loads(row['payload'])
-        out['companies'][row['company']]={**meta,'_disabled':not bool(row['active'])}
-        if not row['active']:continue
-        out['profiles'].setdefault(row['profile'],{})[row['company']]={**meta,**value}
+        if meta.get('source_file'):out['_known_source_files'].append(meta['source_file'])
+        entry=documents.setdefault(row['company'],{}).setdefault(row['id'],
+            {'meta':{**meta,'document_id':row['id']},'active':bool(row['active']),'sequence':row['sequence'],'values':{}})
+        entry['values'][row['profile']]=value
+    for company,files in documents.items():
+        if company in excluded:continue
+        chosen=choices.get(company)
+        if chosen in files and files[chosen]['active']:entry=files[chosen];pinned=True
+        else:
+            entry=max(files.values(),key=lambda f:(int(f['meta'].get('import_revision',0)),str(f['meta'].get('uploaded_at','')),f['sequence']))
+            pinned=False
+        meta={**entry['meta'],'document_selected':pinned,'_disabled':not entry['active']}
+        out['companies'][company]=meta
+        if not entry['active']:continue
+        for pid,value in entry['values'].items():
+            out['profiles'].setdefault(pid,{})[company]={**meta,**value,'document_selected':pinned,'document_id':meta['document_id']}
     return out
+
+
+def migrate_legacy(origin=None,destination=None):
+    """Register confirmed pre-53 route files once, preserving originals and revisions."""
+    with e.STATE_LOCK:
+        from .document_imports import route_path
+        paths=[route_path(origin,destination)] if origin and destination else (root()/'routes').glob('*.json')
+        for path in paths:
+            try:signature=(str(path.resolve()),path.stat().st_mtime_ns,path.stat().st_size)
+            except FileNotFoundError:continue
+            if signature in _MIGRATED:continue
+            data=e._read_json(path,{})
+            for company,meta in data.get('companies',{}).items():
+                filename=str(meta.get('source_file',''))
+                if company not in e.COMPANIES or not re.fullmatch(r'[a-f0-9]{32}\.(pdf|xls|xlsx|csv|zip)',filename):continue
+                if not meta.get('origin') or not meta.get('destination'):continue
+                o,d=e.route_pair(meta['origin'],meta['destination'])
+                if not e.is_supported_route(o,d):continue
+                values={pid:rows[company] for pid,rows in data.get('profiles',{}).items() if company in rows}
+                if not values:continue
+                from .document_imports import _check_values
+                _check_values(values)
+                saved={**meta,'uploaded':True,'route_count':1,'values_count':len(values)}
+                with db() as conn:
+                    if conn.execute('SELECT 1 FROM files WHERE id=?',(filename.split('.')[0],)).fetchone():continue
+                    conn.execute('INSERT INTO files VALUES (?,?,?,1)',(filename.split('.')[0],company,json.dumps(saved,ensure_ascii=False)))
+                    for pid,value in values.items():conn.execute('INSERT INTO prices VALUES (?,?,?,?,?)',(filename.split('.')[0],o,d,pid,json.dumps(value,ensure_ascii=False)))
+            _MIGRATED.add(signature)
+
+
+def register_single(ident,meta,values,origin,destination):
+    migrate_legacy()
+    saved={**meta,'uploaded':True,'route_count':1,'values_count':len(values)}
+    with db() as conn:
+        conn.execute('INSERT INTO files VALUES (?,?,?,1)',(ident,meta['company'],json.dumps(saved,ensure_ascii=False)))
+        for pid,value in values.items():conn.execute('INSERT INTO prices VALUES (?,?,?,?,?)',(ident,origin,destination,pid,json.dumps(value,ensure_ascii=False)))
+        conn.execute('DELETE FROM excluded WHERE company=? AND origin=? AND destination=?',(meta['company'],origin,destination))
+        conn.execute('INSERT OR REPLACE INTO route_documents VALUES (?,?,?,?)',(meta['company'],origin,destination,ident))
+    return saved
+
+
+def document_routes(ident):
+    migrate_legacy()
+    with db() as conn:
+        file=conn.execute('SELECT company,meta FROM files WHERE id=? AND active=1',(_id(ident),)).fetchone()
+        if not file:raise ValueError('Документ не найден или отключён')
+        routes=conn.execute('SELECT origin,destination,COUNT(*) AS values_count FROM prices WHERE file=? GROUP BY origin,destination ORDER BY origin,destination',(ident,)).fetchall()
+    return {'id':ident,'company':file['company'],'meta':json.loads(file['meta']),'routes':[dict(row) for row in routes]}
+
+
+def route_documents(origin,destination):
+    origin,destination=e.route_pair(origin,destination)
+    if not e.is_supported_route(origin,destination):raise ValueError('Выберите два разных города')
+    current=pack(origin,destination)
+    with db() as conn:
+        rows=conn.execute('''SELECT f.id,f.company,f.meta,COUNT(*) AS values_count FROM files f JOIN prices p ON p.file=f.id
+          WHERE f.active=1 AND p.origin=? AND p.destination=? GROUP BY f.id ORDER BY f.rowid DESC''',(origin,destination)).fetchall()
+        total=conn.execute('SELECT COUNT(*) FROM files WHERE active=1').fetchone()[0]
+    files=[]
+    for row in rows:
+        meta=json.loads(row['meta']);selected=current['companies'].get(row['company'],{})
+        files.append({**meta,'id':row['id'],'company':row['company'],'route_values_count':row['values_count'],
+            'selected':selected.get('document_id')==row['id'] and bool(selected.get('document_selected')),
+            'automatic':selected.get('document_id')==row['id'] and not selected.get('document_selected') and not selected.get('_disabled')})
+    return {'origin':origin,'destination':destination,'files':files,'total_files':total}
+
+
+def select_document(company,origin,destination,document_id=None):
+    origin,destination=e.route_pair(origin,destination)
+    if company not in e.COMPANIES or not e.is_supported_route(origin,destination):raise ValueError('Выберите компанию и направление из списка')
+    migrate_legacy()
+    with e.STATE_LOCK:
+        with db() as conn:
+            if document_id:
+                match=conn.execute('''SELECT 1 FROM files f JOIN prices p ON p.file=f.id
+                  WHERE f.id=? AND f.company=? AND f.active=1 AND p.origin=? AND p.destination=? LIMIT 1''',(_id(document_id),company,origin,destination)).fetchone()
+                if not match:raise ValueError('В этом документе нет подтверждённых цен выбранной компании и направления')
+                conn.execute('INSERT OR REPLACE INTO route_documents VALUES (?,?,?,?)',(company,origin,destination,document_id))
+            else:conn.execute('DELETE FROM route_documents WHERE company=? AND origin=? AND destination=?',(company,origin,destination))
+            conn.execute('DELETE FROM excluded WHERE company=? AND origin=? AND destination=?',(company,origin,destination))
+        from .document_imports import bump_revision
+        bump_revision()
+    return {'ok':True,'company':company,'origin':origin,'destination':destination,'document_id':document_id}
 
 
 def disable_route(company,origin,destination):
@@ -58,6 +156,7 @@ def disable_route(company,origin,destination):
 
 
 def list_files():
+    migrate_legacy()
     if not (root()/'documents.sqlite3').exists():return []
     with db() as conn:rows=conn.execute('SELECT id,meta FROM files WHERE active=1 ORDER BY rowid DESC').fetchall()
     return [{'id':r['id'],**json.loads(r['meta'])} for r in rows]
@@ -68,6 +167,7 @@ def remove(ident):
         with db() as conn:
             if not conn.execute('SELECT id FROM files WHERE id=?',(_id(ident),)).fetchone():raise ValueError('Документ не найден')
             conn.execute('UPDATE files SET active=0 WHERE id=?',(ident,))
+            conn.execute('DELETE FROM route_documents WHERE file=?',(ident,))
         from .document_imports import bump_revision
         bump_revision()
     return {'ok':True}
@@ -229,7 +329,7 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
             warnings.append('Загрузка заменит ранее сохранённый прайс этой компании для распознанных маршрутов. Части одного прайса загружайте вместе.')
             if not dates:warnings.append('Дата тарифов не определена. Проверьте актуальность документа.')
             if any((date.today()-date.fromisoformat(s)).days>30 for s in dates):warnings.append('В документе есть тарифы старше 30 дней. Проверьте, что они ещё действуют.')
-            warnings.append('В большой таблице эти цены заполнят строки без подтверждённой онлайн-цены. Источник будет отмечен как файл пользователя.')
+            warnings.append('После подтверждения документ станет выбранным источником его направлений в «Одном маршруте» и большой таблице. Вернуть онлайн-приоритет можно выбором «Автоматически».')
             metadata={'token':token,'company':company,'original_filename':name,'extension':Path(name).suffix.lower(),
                       'sha256':hashlib.sha256(raw).hexdigest(),'created_at':e._now(),'document_date':next(iter(dates)) if len(dates)==1 else None}
             e._robust_json_write(pending/(token+'.json'),{'meta':metadata,'routes':routes,'conflicts':conflicts})
@@ -289,6 +389,7 @@ def commit(token,resolutions=None):
                 _check_values(route['values']);o,d=route['origin'],route['destination']
                 if not e.is_supported_route(o,d):raise ValueError('Некорректный маршрут')
                 conn.execute('DELETE FROM excluded WHERE company=? AND origin=? AND destination=?',(meta['company'],o,d))
+                conn.execute('INSERT OR REPLACE INTO route_documents VALUES (?,?,?,?)',(meta['company'],o,d,ident))
                 for pid,value in route['values'].items():
                     conn.execute('INSERT INTO prices VALUES (?,?,?,?,?)',(ident,o,d,pid,json.dumps({**route['meta'],**value},ensure_ascii=False)))
         path.unlink();source.unlink()

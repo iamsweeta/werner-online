@@ -32,3 +32,5 @@ html[data-theme=light] :is(.app-shell,.sidebar,.topbar,.page,.card,.table-wrap,.
 
 /* Source explanations remain readable in both themes and on small screens. */
 .source-help,.dellin-help{font-size:13px;line-height:1.75;color:var(--muted);overflow-wrap:anywhere;max-width:1050px}.source-help p{margin-top:12px}.source-help strong,.dellin-help strong{color:var(--text)}.dellin-help{margin-top:18px}.dellin-help code{color:var(--text)}
+
+.route-document-choice,.document-route-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;margin-top:16px}.route-document-choice small,.document-route-picker small{grid-column:1/-1;color:var(--muted);font-size:12px}.document-route-picker{grid-column:1/-1}.route-library-card p{color:var(--muted);font-size:13px;line-height:1.65}#routeDocumentStatus{margin-top:14px}@media(max-width:520px){.route-document-choice,.document-route-picker{grid-template-columns:minmax(0,1fr)}.route-library-card .section-head{display:block}.route-library-card .section-head button{margin-top:12px}}

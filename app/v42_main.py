@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="52.0"
+VERSION="53.0"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
@@ -338,6 +338,32 @@ def storage_info():
     return summary()
 
 
+@app.get('/api/route-documents')
+def documents_for_route(origin:str,destination:str):
+    from .price_library import route_documents
+    origin,destination=_validate_route(origin,destination)
+    return _bulk_call(route_documents,origin,destination)
+
+
+class RouteDocumentChoice(BaseModel):
+    company:str
+    origin:str
+    destination:str
+    document_id:str|None=None
+
+
+@app.post('/api/route-documents/select')
+def document_choice(body:RouteDocumentChoice):
+    from .price_library import select_document
+    return _bulk_call(select_document,body.company,body.origin,body.destination,body.document_id)
+
+
+@app.get('/api/price-documents/{document_id}/routes')
+def routes_in_document(document_id:str):
+    from .price_library import document_routes
+    return _bulk_call(document_routes,document_id)
+
+
 @app.get('/api/storage/backup')
 def storage_backup():
     from .storage import backup
@@ -438,7 +464,7 @@ def diagnostics(origin:str="Санкт-Петербург",destination:str="Мо
 def diagnostics_download(origin:str='Санкт-Петербург',destination:str='Москва',profile:str='w100'):
     report=diagnostics(origin,destination,profile)
     return Response(json.dumps(report,ensure_ascii=False,indent=2).encode('utf-8'),media_type='application/json',
-                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_52_0.json"'})
+                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_53_0.json"'})
 
 
 @app.get("/api/settings")

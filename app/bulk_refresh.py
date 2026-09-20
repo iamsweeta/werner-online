@@ -128,9 +128,9 @@ class BulkManager:
             # never remain downloadable after the comparison semantics change.
             for job in db.execute('SELECT id,config FROM jobs').fetchall():
                 config=json.loads(job['config'])
-                if config.get('tariff_schema')==52:continue
-                convert_weights=config.get('tariff_schema') not in {50,51}
-                config.update(companies=[c for c in config['companies'] if c in e.COMPANIES],tariff_schema=52)
+                if config.get('tariff_schema')==53:continue
+                convert_weights=config.get('tariff_schema') not in {50,51,52}
+                config.update(companies=[c for c in config['companies'] if c in e.COMPANIES],tariff_schema=53)
                 for result in (db.execute('SELECT idx,company,payload FROM results WHERE job=?',(job['id'],)).fetchall() if convert_weights else []):
                     if result['company'] not in e.COMPANIES:
                         db.execute('DELETE FROM results WHERE job=? AND idx=? AND company=?',(job['id'],result['idx'],result['company']));continue
@@ -193,7 +193,7 @@ class BulkManager:
             if self.active() or self.route_busy():raise BusyError('Дождитесь текущего обновления или приостановите общий сбор')
             if self.export_worker and self.export_worker.is_alive():raise BusyError('Дождитесь завершения создания Excel')
             ident='bulk-'+uuid.uuid4().hex
-            config={'scope':scope,'origins':origins,'destinations':destinations,'companies':list(e.COMPANIES),'tariff_schema':52,
+            config={'scope':scope,'origins':origins,'destinations':destinations,'companies':list(e.COMPANIES),'tariff_schema':53,
                     'mode':mode,'include_imports':bool(include_imports)}
             with self.db() as db:
                 db.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?)',
@@ -413,17 +413,18 @@ class BulkManager:
 
 
 def fill_document_gaps(rows,imports,origin,destination):
-    """Confirmed online weights win. Exact files fill missing and 'from' cells."""
+    """Selected documents win; automatic documents fill missing online values."""
     rows=deepcopy(rows)
     for row in rows:
         pid=row['profile']['id']
         if pid=='min':continue
         for pos,item in enumerate(row['items']):
             company=item['company'];value=imports.get('profiles',{}).get(pid,{}).get(company)
-            if item.get('collected_online') and tariff_value(item,row['profile']) is not None:continue
+            pinned=bool(value and value.get('document_selected'))
+            if not pinned and item.get('collected_online') and tariff_value(item,row['profile']) is not None:continue
             if not value:continue
             imported=e._route_quote(company,origin,destination,pid,({}, {}, imports))
-            if imported.get('comparison_value') is not None and (tariff_value(imported,row['profile']) is not None or item.get('comparison_value') is None):
+            if imported.get('comparison_value') is not None and (pinned or tariff_value(imported,row['profile']) is not None or item.get('comparison_value') is None):
                 row['items'][pos]={**imported,'bulk_status':'document',
                                   'refresh_error':item.get('refresh_error'),'checked_at':item.get('checked_at')}
     minimum=next(r for r in rows if r['profile']['id']=='min')
@@ -432,9 +433,10 @@ def fill_document_gaps(rows,imports,origin,destination):
         candidates=[r['items'][pos] for r in rows if r['profile']['id']!='min' and r['items'][pos].get('comparison_value') is not None and not r['items'][pos].get('price_is_minimum')]
         if item.get('comparison_value') is not None and not item.get('price_is_minimum'):candidates.append(item)
         explicit=imports.get('profiles',{}).get('min',{}).get(company)
-        if explicit and not item.get('collected_online'):
+        if explicit and (explicit.get('document_selected') or not item.get('collected_online')):
             candidates.append(e._route_quote(company,origin,destination,'min',({}, {}, imports),derive_minimum=False))
-        pools=([c for c in candidates if c.get('collected_online')],
+        pools=([c for c in candidates if c.get('document_selected')],
+               [c for c in candidates if c.get('collected_online')],
                [c for c in candidates if c.get('uploaded')],
                [c for c in candidates if not c.get('collected_online') and not c.get('uploaded')])
         pool=next((group for group in pools if any(c.get('profile_id') in {'min','w001'} for c in group)),[])

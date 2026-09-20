@@ -252,8 +252,8 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
                       and math.isfinite(x['price']) and x['price'] > 0]
         # A 100 kg quote alone cannot prove a carrier's smallest shipment price.
         # Require its explicit minimum or the first comparison weight (0–1 kg).
-        for source in ('online', 'uploaded', 'last_good'):
-            pool = [x for x in candidates if x.get('uploaded')] if source == 'uploaded' else (
+        for source in ('selected', 'online', 'uploaded', 'last_good'):
+            pool = [x for x in candidates if x.get('document_selected')] if source == 'selected' else [x for x in candidates if x.get('uploaded')] if source == 'uploaded' else (
                 [x for x in candidates if x.get('online')] if source == 'online' else
                 [x for x in candidates if not x.get('online') and not x.get('uploaded')])
             if not any(x['profile_id'] in {'min','w001'} for x in pool):
@@ -280,9 +280,9 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
                       and company_live.get('attempt_status') in {'success','partial'}
                       and age_seconds(live_item.get('captured_at'))<LIVE_TTL_SECONDS
                       and profile_id not in (company_live.get('unavailable_profiles') or {}))
-    # Same policy in the route view and bulk export: current exact online
-    # evidence first, confirmed documents for the remaining weights.
-    uploaded=bool(uploaded_item) and not live_current
+    # Explicit route document wins in both views; automatic mode keeps
+    # current exact online evidence first and uses documents for missing rows.
+    uploaded=bool(uploaded_item) and (uploaded_item.get('document_selected') or not live_current)
     unavailable = (company_live.get('unavailable_profiles') or {}).get(profile_id) if not uploaded else None
     use_live=isinstance(live_item,dict) and live_item.get("kind") in {"exact","lower_bound"} and live_item.get("price") is not None
     item=uploaded_item if uploaded else live_item if use_live else base_item
@@ -318,6 +318,8 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
         "source_type":source_type or "Официальный источник","source_url":source_url,"captured_at":captured_at,
         "pricing_engine":"v52_saved_sources","profile_id":profile_id,"destination_variant":destination_variant,"origin_terminal":item.get("origin_terminal") if uploaded else company_live.get("origin_terminal") if use_live else None,
         "data_origin":data_origin,"online":online,"freshness":freshness,"uploaded":uploaded,
+        "document_id":item.get('document_id') if uploaded else None,
+        "document_selected":bool(uploaded and item.get('document_selected')),
         "live_attempt_id":row_attempt if use_live else None,"transport":item.get("transport") if use_live else None,
         "refresh_status":current_status or "not_run","refresh_attempted_at":company_live.get("last_attempt_at"),
         "refresh_error":refresh_error,

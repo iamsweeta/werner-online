@@ -153,6 +153,7 @@ class WorkspaceDocuments(unittest.TestCase):
         wb=load_workbook(m.download(job['job_id']),data_only=True);self.assertEqual(wb['WernerNEW']['N2'].value,None);wb.close()
     def test_online_exact_has_priority_and_minimum_is_lowest_shipment(self):
         self.save(raw=csv([('Werner','Казань','Уфа',1,600),ROWS[0],ROWS[1]]))
+        library.select_document('Werner','Казань','Уфа',None)
         aid=e.begin_live_attempt('Werner','Казань','Уфа')
         e.save_live_update('Werner','Казань','Уфа',{'w100':{'kind':'exact','price':3000}},{'source_url':'https://example.invalid/test'},aid)
         e.finish_live_attempt('Werner','Казань','Уфа',aid,rows=1)

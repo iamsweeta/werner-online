@@ -29,6 +29,7 @@ def route_path(origin, destination):
 
 
 def pack(origin, destination):
+    origin,destination=e.route_pair(origin,destination)
     from .price_library import pack as multi_pack
     result=multi_pack(origin,destination)
     legacy=_legacy_pack(origin,destination)
@@ -36,6 +37,7 @@ def pack(origin, destination):
         for company,row in rows.items():legacy.setdefault('companies',{}).setdefault(company,row)
     def order(meta):return (int(meta.get('import_revision',0)),str(meta.get('uploaded_at','')))
     for company,meta in legacy.get('companies',{}).items():
+        if meta.get('source_file') in result.get('_known_source_files',[]):continue
         if order(meta)>=order(result['companies'].get(company,{})):
             result['companies'][company]=meta
             for rows in result['profiles'].values():rows.pop(company,None)
@@ -130,13 +132,8 @@ def commit(token):
         filename=token+meta['extension'];target=root()/'files'/filename
         target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
         saved={**meta,'import_revision':revision()+1,'source_file':filename,'uploaded_at':e._now(),'captured_at':e._now(),'online':False}
-        current=_legacy_pack(o,d)
-        # Replace only this carrier in this ordered route. Old imported weights
-        # are removed even when the replacement document has fewer rows.
-        for rows in current.setdefault('profiles',{}).values():rows.pop(company,None)
-        current.setdefault('companies',{})[company]=saved
-        for pid,row in values.items():current['profiles'].setdefault(pid,{})[company]={**saved,**row}
-        e._robust_json_write(route_path(o,d),current)
+        from .price_library import register_single
+        saved=register_single(token,saved,values,o,d)
         bump_revision()
         pending.unlink(missing_ok=True);source.unlink(missing_ok=True)
         return {'ok':True,'company':company,'origin':o,'destination':d,'rows':len(values),'meta':saved}

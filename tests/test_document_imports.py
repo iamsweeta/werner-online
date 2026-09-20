@@ -41,7 +41,9 @@ class ImportLifecycle(unittest.TestCase):
         for company,route in [('Мейджик',ROUTE),('Werner',ROUTE[::-1]),('Werner',('Казань','Самара'))]:self.assertIsNone(self.quote(company,route)['price'])
         engine._cached_json.cache_clear();self.assertEqual(self.quote()['price'],1234)
         self.assertEqual(self.client.get('/api/import-file/'+q['source_file']).content,raw)
-        # Fresh online evidence wins without changing the stored user document.
+        # Automatic source selection prefers fresh online evidence; a pinned file does not.
+        from app.price_library import select_document
+        select_document('Werner',*ROUTE,None)
         aid=engine.begin_live_attempt('Werner',*ROUTE)
         engine.save_live_update('Werner',*ROUTE,{'w100':{'kind':'exact','price':2000}}, {'origin':ROUTE[0],'destination':ROUTE[1]},aid)
         engine.finish_live_attempt('Werner',*ROUTE,aid,rows=1)

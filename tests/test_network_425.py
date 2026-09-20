@@ -194,7 +194,7 @@ class AppRegressionTests(unittest.TestCase):
             r=self.client.get('/api/diagnostics/download',params={'origin':self.route[0],'destination':self.route[1],'profile':'w200'})
         self.assertEqual(r.status_code,200);self.assertNotIn(secret,r.text)
         self.assertIn('attachment',r.headers['content-disposition']);self.assertEqual(r.json()['profile'],'w200')
-        self.assertIn('environment',r.json());self.assertEqual(r.json()['version'],'52.0')
+        self.assertIn('environment',r.json());self.assertEqual(r.json()['version'],'53.0')
 
 
 if __name__=='__main__':unittest.main()

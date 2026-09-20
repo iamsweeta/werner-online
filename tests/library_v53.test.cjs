@@ -1,0 +1,41 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
+const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'static/index.html'),'utf8');
+const script=['workspace.js','app.js'].map(f=>fs.readFileSync(path.join(root,'static',f),'utf8')).join('\n');
+const pause=ms=>new Promise(r=>setTimeout(r,ms));async function until(fn){for(let i=0;i<400;i++){if(fn())return;await pause(5)}throw Error('UI timeout');}
+(async()=>{
+ const dom=new JSDOM(html,{url:'http://localhost:8423',runScripts:'outside-only'}),w=dom.window,$=id=>w.document.getElementById(id);
+ w.AbortController=AbortController;w.localStorage.setItem('tariff-route-v44',JSON.stringify({origin:'Москва',destination:'Санкт-Петербург'}));w.localStorage.setItem('tariff-workspace-v48','route');
+ const ids=['a'.repeat(32),'b'.repeat(32)];let selected=ids[1],postCount=0;const errors=[];w.addEventListener('error',e=>errors.push(e.message));
+ const profiles=[{id:'w100',weight_kg:100,description:'100 кг',label:'до 100 кг',range_weight:'100 кг'}];
+ const files=ids.map((id,i)=>({id,company:'ДЛ',original_filename:'price-'+i+'.pdf',source_file:id+'.pdf',extension:'.pdf',route_count:1,values_count:1,uploaded_at:'2026-09-01T00:00:00Z',document_date:'2026-09-01'}));
+ const item=()=>({company:'ДЛ',company_label:'ДЛ',status:'ok',price:selected===ids[0]?1200:selected===ids[1]?1500:2000,comparison_value:selected===ids[0]?1200:selected===ids[1]?1500:2000,uploaded:!!selected,online:!selected,document_selected:!!selected,original_filename:selected===ids[0]?'price-0.pdf':'price-1.pdf'});
+ w.fetch=async(url,request={})=>{const u=new URL(url,w.location.href),p=u.pathname;let data;
+  if(p==='/api/options')data={catalog:u.searchParams.get('catalog')||'main',origins:['Москва','Санкт-Петербург'],all_origins:['Москва','Санкт-Петербург'],destinations:['Санкт-Петербург'],selected_origin:'Москва',selected_destination:'Санкт-Петербург',companies:[{id:'ДЛ',label:'ДЛ'}],profiles,integrations:[],integration_status:{}};
+  else if(p==='/api/compare')data={origin:'Москва',destination:'Санкт-Петербург',profile_id:'w100',range_weight:'100 кг',items:[item()]};
+  else if(p==='/api/profile-matrix')data={profiles:[{profile:profiles[0],items:[item()]}]};
+  else if(p==='/api/active-collect'||p==='/api/bulk')data={status:'idle'};
+  else if(p==='/api/bulk/plan')data={routes:254,companies:17,checks:4318};
+  else if(p==='/api/storage')data={files:2,bytes:100,confirmed_retention:'Сохранено'};
+  else if(p==='/api/price-documents')data={files};
+  else if(p==='/api/route-documents')data={origin:'Москва',destination:'Санкт-Петербург',files:files.map(f=>({...f,selected:f.id===selected,route_values_count:1})),total_files:2};
+  else if(p==='/api/route-documents/select'){const body=JSON.parse(request.body);assert.equal(body.origin,'Москва');assert.equal(body.destination,'Санкт-Петербург');assert.equal(body.company,'ДЛ');selected=body.document_id;postCount++;data={ok:true};}
+  else if(p==='/api/price-documents/'+ids[1]+'/routes')data={id:ids[1],company:'ДЛ',routes:[{origin:'Москва',destination:'Санкт-Петербург',values_count:1}]};
+  else throw Error('Unexpected '+url);
+  return {ok:true,json:async()=>data};
+ };
+ w.eval(script);await until(()=>$('routeDocumentList').querySelector('select'));
+ assert.equal($('routeDocumentList').querySelector('select').value,ids[1]);
+ $('liveModeSelect').value='live';$('liveModeSelect').dispatchEvent(new w.Event('change'));
+ $('routeDocumentList').querySelector('select').value=ids[0];$('routeDocumentList').querySelector('button').click();
+ await until(()=>postCount===1&&$('comparisonTable').textContent.includes('1\u00a0200')&&!$('routeDocumentList').querySelector('button').disabled);
+ assert.equal($('liveModeSelect').value,'all');assert.match($('comparisonTable').textContent,/Выбранный файл/);
+ assert.match(w.queryString(),/live_only=false/);
+ $('routeDocumentList').querySelector('select').value='';$('routeDocumentList').querySelector('button').click();
+ await until(()=>postCount===2&&$('comparisonTable').textContent.includes('2\u00a0000')&&!$('routeDocumentList').querySelector('button').disabled);
+ $('routeLibraryButton').click();await until(()=>$('documentsList').querySelectorAll('[data-document-routes]').length===2);
+ assert.equal($('documentsPanel').hidden,false);
+ $('documentsList').querySelectorAll('[data-document-routes]')[1].click();await until(()=>$('documentsList').querySelector('.document-route-picker button'));
+ $('documentsList').querySelector('.document-route-picker button').click();await until(()=>postCount===3&&$('routeWorkspace').hidden===false&&$('comparisonTable').textContent.includes('1\u00a0500'));
+ assert.equal(selected,ids[1]);assert.equal($('extendedRoutesToggle').checked,true,'file routes use full catalog');assert.deepEqual(errors,[]);
+ dom.window.close();console.log('PASS: library route picker, explicit file selection, automatic mode, strict-filter reset and shared source API');
+})().catch(e=>{console.error(e);process.exit(1)});
