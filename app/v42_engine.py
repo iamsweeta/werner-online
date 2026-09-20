@@ -17,7 +17,7 @@ from .cities import normalize_city, route_supported, route_slug
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-RUNTIME_DIR = BASE_DIR / "runtime"
+RUNTIME_DIR = Path(os.environ.get('TARIFF_DATA_DIR') or BASE_DIR / 'runtime').expanduser().resolve()
 ROUTE_CONFIG = {
     ("Санкт-Петербург", "Москва"): {
         "slug": "spb_moscow",
@@ -188,8 +188,8 @@ def save_live_update(company: str, origin: str, destination: str, profile_values
         if company_meta.get('current_attempt_id') != aid:
             raise ValueError('Устаревшая попытка обновления: её результат отклонён')
         captured_at=str(meta.get("captured_at") or _now())
-        for pid in meta.get('unavailable_profiles', {}):
-            live.setdefault('profiles', {}).setdefault(pid, {}).pop(company, None)
+        # Absence in a new response must not destroy the last successful price.
+        # The quote below marks retained rows as unconfirmed, never as LIVE.
         for pid,item in profile_values.items():
             if pid not in PROFILE_BY_ID or not isinstance(item,dict):
                 continue
@@ -286,14 +286,14 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
     unavailable = (company_live.get('unavailable_profiles') or {}).get(profile_id) if not uploaded else None
     use_live=isinstance(live_item,dict) and live_item.get("kind") in {"exact","lower_bound"} and live_item.get("price") is not None
     item=uploaded_item if uploaded else live_item if use_live else base_item
-    if unavailable:
+    if unavailable and not use_live:
         item={'kind':'missing','price':None};use_live=False
     kind=item.get("kind") or "missing"; price=item.get("price")
 
     row_attempt=item.get("attempt_id") if use_live and not uploaded else None
     current_attempt=company_live.get("current_attempt_id")
     current_status=company_live.get("attempt_status")
-    online=bool(not uploaded and use_live and row_attempt and row_attempt==current_attempt and current_status in {"success","partial"}
+    online=bool(not unavailable and not uploaded and use_live and row_attempt and row_attempt==current_attempt and current_status in {"success","partial"}
                 and age_seconds(item.get('captured_at')) < LIVE_TTL_SECONDS)
     if uploaded:
         freshness='user_document'
@@ -312,22 +312,26 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
     source_url=item.get("source_url") if use_live or uploaded else base_meta.get("source_url")
     captured_at=item.get("captured_at") if use_live or uploaded else base_meta.get("captured_at")
     destination_variant=(item.get("destination_variant") if use_live or uploaded else base_meta.get("destination_variant"))
+    refresh_error=(company_live.get('missing_profile_errors') or {}).get(profile_id) or company_live.get('last_error') or unavailable
     base={
         "company":company,"company_label":COMPANY_LABELS.get(company,company),"comparison_unit":"₽",
         "source_type":source_type or "Официальный источник","source_url":source_url,"captured_at":captured_at,
-        "pricing_engine":"v51_verified_sources","profile_id":profile_id,"destination_variant":destination_variant,"origin_terminal":item.get("origin_terminal") if uploaded else company_live.get("origin_terminal") if use_live else None,
+        "pricing_engine":"v52_saved_sources","profile_id":profile_id,"destination_variant":destination_variant,"origin_terminal":item.get("origin_terminal") if uploaded else company_live.get("origin_terminal") if use_live else None,
         "data_origin":data_origin,"online":online,"freshness":freshness,"uploaded":uploaded,
         "live_attempt_id":row_attempt if use_live else None,"transport":item.get("transport") if use_live else None,
         "refresh_status":current_status or "not_run","refresh_attempted_at":company_live.get("last_attempt_at"),
-        "refresh_error":company_live.get("last_error"),
-        "error_info":explain_error(company_live["last_error"]) if company_live.get("last_error") else None,
+        "refresh_error":refresh_error,
+        "retained_previous":bool(use_live and not online and not uploaded),
+        "latest_availability":'on_request' if unavailable else None,
+        "latest_availability_message":unavailable,
+        "error_info":explain_error(refresh_error) if refresh_error else None,
         "source_file":item.get('source_file') if use_live or uploaded else None,
         "sha256":item.get('sha256') if use_live or uploaded else None,
         **{k:item.get(k) for k in ('original_filename','uploaded_at','document_date','source_page','source_pages','source_row','archive_member','tariff_kind','weight_from','weight_to','tax_basis')},
         "calculation_basis":item.get('calculation_basis') or 'Опубликованный тариф по весу; объём и дополнительные услуги не включены',
         "volume_m3":item.get('volume_m3'),
     }
-    if unavailable:
+    if unavailable and not use_live:
         proof=company_live.get('unavailable_evidence') or {}
         return {**base,**proof,'status':'on_request','availability':'on_request','online':False,
                 'freshness':'missing','price':None,'comparison_value':None,'price_is_minimum':False,
@@ -341,7 +345,8 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
         elif online:
             msg=f"LIVE: получено при последней онлайн-загрузке и проверено для {o} → {d}{where}."
         elif use_live:
-            msg=f"LAST GOOD: последнее успешно полученное онлайн-значение для {o} → {d}{where}; текущая попытка его не подтверждала."
+            msg=f"Сохранённая цена для {o} → {d}{where} от {captured_at}; актуальность сейчас не подтверждена."
+            if unavailable:msg+=' Последний ответ источника: '+str(unavailable)+'.'
         else:
             msg=f"LAST GOOD: архивная запись исходного проекта для {o} → {d}{where}; актуальность не проверена."
         if not uploaded and current_status=="failed" and company_live.get("last_error"):

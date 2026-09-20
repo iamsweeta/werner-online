@@ -141,7 +141,7 @@ class WorkspaceDocuments(unittest.TestCase):
         saved=self.save();m=self.manager();m.start('origins',['Казань'],['Уфа'],mode='saved');job=self.done(m)
         self.assertEqual(job['completed_checks'],17);self.assertEqual(job['outcomes'],{'saved':17})
         coverage=next(c for c in job['coverage'] if c['company']=='Werner')
-        self.assertEqual(coverage,{'company':'Werner','online':0,'document':0,'missing':28})
+        self.assertEqual(coverage,{'company':'Werner','online':0,'saved':0,'document':0,'missing':28})
         with io.BytesIO(m.download(job['job_id']).read_bytes()) as buffer:
             wb=load_workbook(buffer,data_only=True)
             self.assertEqual(wb['WernerNEW']['B2'].value,'Казань');self.assertEqual(wb['WernerNEW']['N2'].value,None)

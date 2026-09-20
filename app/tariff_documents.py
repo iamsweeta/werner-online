@@ -64,10 +64,19 @@ def checked_zip(raw):
     return z
 
 
+def normalize_filename(filename):
+    """Repair browser/server quote artifacts without trusting the extension alone."""
+    name = str(filename or '').replace('\\', '/').rsplit('/', 1)[-1]
+    name = name.strip(" \t\r\n\"'‘’“”`")
+    name = ''.join(c for c in name if ord(c) >= 32)
+    ext = PurePosixPath(name).suffix
+    return name[:max(0, 180-len(ext))] + ext if len(name) > 180 else name
+
+
 def validate_file(raw, filename):
     if not raw or len(raw) > MAX_BYTES:
         raise ValueError('Загрузите непустой документ размером не более 20 МБ')
-    ext = PurePosixPath(filename).suffix.lower()
+    ext = PurePosixPath(normalize_filename(filename)).suffix.lower()
     if ext not in {'.pdf', '.xls', '.xlsx', '.zip', '.csv'}:
         raise ValueError('Поддерживаются PDF с текстом, XLS, XLSX, CSV и ZIP с прайс-листами')
     cache=_SESSION.get();key=('valid',raw,ext)
@@ -381,6 +390,7 @@ def parse_generic_pdf(raw, company, origin, destination):
 
 
 def parse_document(raw, filename, company, origin, destination):
+    filename=normalize_filename(filename)
     values,meta=_parse_document(raw,filename,company,origin,destination)
     from .source_conditions import document_conditions
     conditions=document_conditions(raw,PurePosixPath(filename).suffix)

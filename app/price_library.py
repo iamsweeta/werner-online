@@ -131,11 +131,12 @@ def _candidates(raw,filename,company,origin):
 
 def parse_routes(raw,filename,company,origin=None,on_progress=None,conflicts=None):
     """Read native formats and explicit templates without deriving absent prices."""
+    filename=t.normalize_filename(filename)
     t.validate_file(raw,filename)
     if Path(filename).suffix.lower()=='.zip':
         output={};errors=[]
         with t.checked_zip(raw) as z:
-            docs=[i for i in z.infolist() if Path(i.filename).suffix.lower() in {'.pdf','.xls','.xlsx','.csv'}]
+            docs=[i for i in z.infolist() if Path(t.normalize_filename(i.filename)).suffix.lower() in {'.pdf','.xls','.xlsx','.csv'}]
             if not docs or len(docs)>30:raise ValueError('В ZIP должно быть от 1 до 30 документов PDF, Excel или CSV')
             for info in docs:
                 if info.file_size>t.MAX_BYTES:raise ValueError('Документ внутри ZIP превышает 20 МБ')
@@ -186,7 +187,7 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
     except Exception as exc:raise ValueError('Не удалось прочитать документ: '+str(exc)[:500]) from exc
     if document_date:
         if date.fromisoformat(document_date)>date.today():raise ValueError('Дата тарифов ещё не наступила')
-    token=uuid.uuid4().hex;name=Path(filename.replace('\\','/')).name[:180]
+    token=uuid.uuid4().hex;name=t.normalize_filename(filename)
     pending=root()/'multi_pending';pending.mkdir(parents=True,exist_ok=True)
     with LOCK:
         for key in list(JOBS):
@@ -207,6 +208,7 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
             conflicts=[]
             parsed,errors=parse_routes(raw,name,company,origin,progress,conflicts)
             routes=[];dates=set();warnings=[]
+            if name!=filename:warnings.append('Имя файла исправлено: '+name+'. Содержимое проверено отдельно.')
             for (o,d),item in parsed.items():
                 stamp=item['meta'].get('document_date') or document_date
                 if stamp:
@@ -247,7 +249,7 @@ def start_many(files,company,origin=None,document_date=None):
     buffer=io.BytesIO()
     with zipfile.ZipFile(buffer,'w',zipfile.ZIP_DEFLATED) as archive:
         for i,(name,raw) in enumerate(files,1):
-            clean=Path(name.replace('\\','/')).name
+            clean=t.normalize_filename(name)
             if Path(clean).suffix.lower() not in {'.pdf','.xlsx','.xls','.csv'}:raise ValueError('Для нескольких файлов выберите PDF, Excel или CSV. ZIP загрузите отдельно.')
             archive.writestr(f'{i:02d}_{clean}',raw)
     return start_preview(buffer.getvalue(),'Прайсы_'+company+'.zip',company,origin,document_date)

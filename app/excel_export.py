@@ -102,7 +102,7 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
                     snapshot[route]=fill_document_gaps(rows,pack(*route),*route)
         data=snapshot.items()
     values={}
-    counts={'online':0,'document':0,'missing':0}
+    counts={'online':0,'saved':0,'document':0,'missing':0}
     audit=wb.create_sheet('Источники')
     audit.append(['Компания','Откуда','Куда','Диапазон','Стоимость отправки, ₽','Статус',
                   'Получено','Официальный URL','Расчёт','Файл пользователя','Дата документа',
@@ -116,7 +116,7 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
                 values[(route,c,p['id'])]=_value(item,p,live_only,include_imports) if c in selected else None
                 if c not in selected:continue
                 if _allowed(item,live_only,include_imports) and tariff_value(item,p) is not None:
-                    counts['document' if item.get('uploaded') else 'online']+=1
+                    counts['document' if item.get('uploaded') else 'online' if item.get('collected_online') or item.get('online') else 'saved']+=1
                 else:counts['missing']+=1
                 allowed=_allowed(item,live_only,include_imports)
                 status=('Проверено при сборе' if collection_info and item.get('collected_online') else 'Файл пользователя' if item.get('uploaded') else 'LIVE' if item.get('online')
@@ -127,7 +127,7 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
                               item.get('captured_at'),item.get('source_url'),item.get('calculation_basis'),
                               item.get('original_filename'),item.get('document_date'),item.get('sha256'),
                               str(item.get('source_page') or item.get('source_row') or ''),
-                              item.get('refresh_error') or ('Источник даёт сумму отправки; ставка за кг не опубликована' if is_rate_profile(p) and item.get('comparison_value') is not None and tariff_value(item,p) is None else item.get('message') if item.get('price') is None else ''),
+                              item.get('refresh_error') or item.get('latest_availability_message') or ('Источник даёт сумму отправки; ставка за кг не опубликована' if is_rate_profile(p) and item.get('comparison_value') is not None and tariff_value(item,p) is None else item.get('message') if item.get('price') is None else ''),
                               item.get('published_rate_per_kg') if allowed else None,item.get('minimum_charge') if allowed else None,item.get('tax_basis') or 'Не определены; см. оригинал']
                 if collection_info:
                     record[6]=record[6] or item.get('checked_at')
@@ -179,11 +179,12 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
             ('Проверок выполнено',collection_info['completed_checks']),('Часть',f"{collection_info.get('part',1)} из {collection_info.get('parts',1)}"),
             ('Режим','Текущие данные + прайс-листы' if collection_info.get('mode')=='saved' else 'Обновление онлайн + прайс-листы' if collection_info.get('include_imports') else 'Обновление только онлайн'),
             ('Числовых ячеек из онлайн-ответов',counts['online']),('Числовых ячеек из файлов',counts['document']),
+            ('Числовых ячеек из прежних сохранённых цен',counts['saved']),
             ('Ячеек без точного значения',counts['missing']),
             ('Завершение','Все запланированные проверки выполнены' if collection_info['status']=='done' else 'Частичная выгрузка: непроверенные маршруты не включены'),
             ('Обновление','Запустите новый общий сбор в приложении, затем скачайте Excel'),
             ('Время цен','Цены проверялись последовательно. Дата каждого источника указана в «Источники». Это не одновременный снимок всех сайтов.'),
-            ('Источники','Подтверждённая онлайн-цена имеет приоритет. При её отсутствии используется подтверждённый файл пользователя. Архивные цены не подставляются.' if collection_info.get('include_imports') else 'Только ответы онлайн-сбора. Файлы пользователя и архивные цены не включены.'),
+            ('Источники','Подтверждённая онлайн-цена имеет приоритет. При её отсутствии используется подтверждённый файл пользователя, затем последнее сохранённое онлайн-значение с исходной датой.' if collection_info.get('include_imports') else 'Онлайн-ответы; при неудачном обновлении — последнее сохранённое онлайн-значение с исходной датой. Файлы пользователя исключены.'),
             ('Весовые источники','До 50 кг — сумма отправки; от 100 кг — опубликованная ставка руб/кг. Сумма и минимальная плата хранятся отдельно в «Источниках». Нет ставки — известна только сумма расчёта.'),
             ('Отсутствующие цены','Пустая ячейка: числовой тариф не получен, не опубликован или исключён фильтром. Причина — в Источниках. Это не нулевая стоимость.')]:
             report.append([label,value])

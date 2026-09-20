@@ -29,3 +29,6 @@ html[data-theme=light] :is(.app-shell,.sidebar,.topbar,.page,.card,.table-wrap,.
 .storage-info{display:flex;gap:20px;align-items:center;justify-content:space-between;margin-top:20px;padding:18px;border:1px solid var(--border);border-radius:10px}
 .storage-info p{font-size:12px;color:var(--muted);max-width:660px}.storage-info a{flex-shrink:0}
 @media(max-width:800px){.storage-info{display:block}.storage-info a{margin-top:12px}.theme-choice{padding:7px 9px;font-size:12px}}
+
+/* Source explanations remain readable in both themes and on small screens. */
+.source-help,.dellin-help{font-size:13px;line-height:1.75;color:var(--muted);overflow-wrap:anywhere;max-width:1050px}.source-help p{margin-top:12px}.source-help strong,.dellin-help strong{color:var(--text)}.dellin-help{margin-top:18px}.dellin-help code{color:var(--text)}

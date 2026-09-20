@@ -34,7 +34,7 @@ from .extended_sources import (
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-RUNTIME_DIR = BASE_DIR / "runtime"
+RUNTIME_DIR = Path(os.environ.get("TARIFF_DATA_DIR") or BASE_DIR / "runtime").expanduser().resolve()
 CACHE_DIR = RUNTIME_DIR / "cache"
 EXPORT_DIR = RUNTIME_DIR / "exports"
 SETTINGS_PATH = RUNTIME_DIR / "settings.json"

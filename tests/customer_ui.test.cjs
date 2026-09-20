@@ -14,7 +14,7 @@ $('unitModeSelect').value='per_kg';$('unitModeSelect').dispatchEvent(new w.Event
 assert.equal(w.exactViewValue(items[0],profiles[0]),39.2);assert.equal(w.exactViewValue(items[2],profiles[2]),15);assert.equal(w.exactViewValue(items[1],profiles[1]),196);assert.equal(w.activeUnit(profiles[1]),'₽');
 assert.match($('matrixBody').textContent,/39,2 ₽\/кг/);assert.match($('matrixBody').textContent,/15 ₽\/кг/);assert.match($('unitModeNote').textContent,/расчётная величина/);assert.equal(w.localStorage.getItem('tariff-unit-mode-v50'),'per_kg');
 assert.equal(w.exactViewValue({price:500,comparison_value:500,price_is_minimum:true},profiles[0]),null);assert.equal(w.exactViewValue({},profiles[0]),null);
-s.graphScope='heavy';w.renderTariffGraph(data);assert.match($('rateChart').textContent,/₽\/кг/);
+s.graphScope='medium';w.renderTariffGraph(data);assert.match($('rateChart').textContent,/₽\/кг/);
 w.document.documentElement.dataset.theme='light';const light=w.graphColor(0);w.toggleTheme();assert.equal(w.document.documentElement.dataset.theme,'dark');assert.notEqual(w.graphColor(0),light);w.toggleTheme();assert.equal(w.graphColor(0),light);
 $('unitModeSelect').value='total';$('unitModeSelect').dispatchEvent(new w.Event('change'));assert.equal(w.exactViewValue(items[2],profiles[2]),1500);assert.equal(w.localStorage.getItem('tariff-unit-mode-v50'),'total');assert.doesNotMatch($('rateChart').textContent,/₽\/кг/);
 assert.equal($('bulkScope').value,'reference');assert.ok($('extendedRoutesToggle'));assert.ok($('documentPointsButton'));

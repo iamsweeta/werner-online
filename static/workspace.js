@@ -12,7 +12,7 @@ function setWorkspace(name,{focus=false}={}){
   if(focus)wsEl('workspaceTitle').focus({preventScroll:true});
   if(name==='documents')refreshDocuments();
   if(name==='bulk')refreshBulkAfterDocuments();
-  if(name==='route'&&state.options){compare().then(maybeRefresh);}
+  if(name==='route'&&state.options){compare();}
 }
 function updateThemeButton(){
   const dark=document.documentElement.dataset.theme==='dark';
@@ -125,7 +125,7 @@ async function commitPriceDocument(){
 }
 function renderCoverage(job){
   const rows=job.coverage||[];wsEl('bulkCoverage').hidden=!rows.length;
-  wsEl('bulkCoverageRows').innerHTML=rows.map(r=>`<tr><td><strong>${escapeHtml(r.company)}</strong></td><td>${Number(r.online).toLocaleString('ru-RU')}</td><td>${Number(r.document).toLocaleString('ru-RU')}</td><td class="${r.missing?'coverage-missing':''}">${Number(r.missing).toLocaleString('ru-RU')}</td><td>${r.missing?`<button class="text-button" data-add-price-company="${escapeHtml(r.company)}" type="button">Добавить прайс</button>`:'Заполнено'}</td></tr>`).join('');
+  wsEl('bulkCoverageRows').innerHTML=rows.map(r=>`<tr><td><strong>${escapeHtml(r.company)}</strong></td><td>${Number(r.online).toLocaleString('ru-RU')}</td><td>${Number(r.saved||0).toLocaleString('ru-RU')}</td><td>${Number(r.document).toLocaleString('ru-RU')}</td><td class="${r.missing?'coverage-missing':''}">${Number(r.missing).toLocaleString('ru-RU')}</td><td>${r.missing?`<button class="text-button" data-add-price-company="${escapeHtml(r.company)}" type="button">Добавить прайс</button>`:'Заполнено'}</td></tr>`).join('');
   wsEl('bulkCoverageRows').querySelectorAll('[data-add-price-company]').forEach(button=>button.addEventListener('click',()=>{
     if(!documentState.busy){resetDocumentPreview();wsEl('documentCompany').value=button.dataset.addPriceCompany;documentGuide();}
     setWorkspace('documents',{focus:true});

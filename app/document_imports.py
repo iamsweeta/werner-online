@@ -9,7 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import v42_engine as e
-from .tariff_documents import parse_document, MAX_BYTES
+from .tariff_documents import parse_document, normalize_filename, MAX_BYTES
 
 PREVIEW_TTL = 1800
 
@@ -100,7 +100,8 @@ def preview(raw, filename, company, origin, destination):
     else:warnings.append('Дата действия тарифов в документе не распознана. Проверьте её в оригинале.')
     if len(values)<len(e.COMMON_PROFILES):warnings.append('Часть весов отсутствует в файле. Для них сохранится отдельный онлайн/архивный источник; значения не будут достроены.')
     token=uuid.uuid4().hex
-    name=Path(str(filename).replace('\\','/')).name[:180]
+    name=normalize_filename(filename)
+    if name!=str(filename):warnings.append('Имя файла исправлено: '+name+'. Содержимое проверено отдельно.')
     ext=Path(name).suffix.lower()
     meta={**parsed,'original_filename':name,'sha256':hashlib.sha256(raw).hexdigest(),
           'company':company,'origin':origin,'destination':destination,'created_at':e._now(),

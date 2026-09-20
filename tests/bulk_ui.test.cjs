@@ -41,7 +41,7 @@ async function until(fn){for(let i=0;i<400;i++){if(fn())return;await pause(5)}th
  $('bulkStartButton').click();await until(()=>!$('bulkPauseButton').hidden);
  assert.equal(starts.length,1);assert.deepEqual(starts[0],{scope:'reference'});
  assert.equal($('bulkStartButton').disabled,true);assert.equal($('collectButton').disabled,true);
- $('autoRefreshToggle').checked=true;$('autoRefreshToggle').dispatchEvent(new w.Event('change'));
+ assert.equal($('autoRefreshToggle'),null,'collection only starts on explicit request');
  await pause(20);assert.equal(routeCollect,0);
  $('bulkPauseButton').click();await until(()=>!$('bulkResumeButton').hidden);
  assert.equal($('bulkPauseButton').hidden,true);assert.equal($('bulkRetryButton').hidden,false);

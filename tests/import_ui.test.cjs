@@ -38,7 +38,7 @@ async function until(fn){for(let i=0;i<250;i++){if(fn())return;await pause(5)}th
  assert.match($('importRows').textContent,/1\s234/);assert.match($('importRoute').textContent,/Казань → Екатеринбург/);
  $('importConfirmed').checked=true;$('importConfirmed').dispatchEvent(new w.Event('change'));$('importApplyButton').click();
  await until(()=>$('importedCount').textContent==='1'&&!$('importCompany').disabled);
- assert.equal(commitCount,1);assert.equal($('onlineCount').textContent,'0');assert.equal($('liveModeSelect').value,'mixed');
+ assert.equal(commitCount,1);assert.equal($('onlineCount').textContent,'0');assert.equal($('liveModeSelect').value,'all');
  assert.match($('comparisonTable').textContent,/Файл пользователя/);
  assert.match($('comparisonTable').innerHTML,/\/api\/import-file\/abc.xlsx/);
  assert.match($('matrixBody').textContent,/1\s234 ₽/);

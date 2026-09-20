@@ -62,31 +62,31 @@ def route_plan(scope='reference', origins=None, destinations=None):
 
 
 def capture_company(company, origin, destination, result):
-    """Freeze only rows confirmed by this attempt. No imported/archived fallback."""
+    """Freeze the last known prices, keeping failed refreshes visibly distinct."""
     with e.STATE_LOCK:
         live=e._live_pack(origin,destination)
     meta=(live.get('companies') or {}).get(company,{})
     aid=meta.get('current_attempt_id')
     clean={'companies':{company:deepcopy(meta)},'profiles':{}}
-    if result.get('ok') and meta.get('attempt_status') in {'success','partial'}:
-        for pid,companies in live.get('profiles',{}).items():
-            row=companies.get(company)
-            if row and aid and row.get('attempt_id')==aid and e.age_seconds(row.get('captured_at'))<e.LIVE_TTL_SECONDS:
-                clean['profiles'][pid]={company:deepcopy(row)}
-    else:
-        clean['companies'][company]['unavailable_profiles']={}
+    if not result.get('ok') and not result.get('snapshot'):
+        clean['companies'][company].update(attempt_status='failed',last_error=result.get('message'))
+    for pid,companies in live.get('profiles',{}).items():
+        row=companies.get(company)
+        if row:
+            clean['profiles'][pid]={company:deepcopy(row)}
     packs=({},clean,{})
     items=[e._route_quote(company,origin,destination,p['id'],packs) for p in e.COMMON_PROFILES]
     for item in items:
         item['collected_online']=bool(item.get('online'))
         item['checked_at']=meta.get('last_finished_at') or now()
     exact=sum(tariff_value(i,e.PROFILE_BY_ID[i['profile_id']]) is not None for i in items if i['profile_id']!='min')
+    confirmed=sum(i.get('collected_online') and tariff_value(i,e.PROFILE_BY_ID[i['profile_id']]) is not None for i in items if i['profile_id']!='min')
     lower=sum(bool(i.get('price_is_minimum')) for i in items)
     request=sum(i.get('availability')=='on_request' for i in items if i['profile_id']!='min')
     error=result.get('message') if not result.get('ok') else meta.get('last_error')
     if not result.get('ok'):
         status='unavailable' if (result.get('error_info') or {}).get('code')=='route_unpublished' else 'failed'
-    elif exact==len(WEIGHTS):status='complete'
+    elif confirmed==len(WEIGHTS):status='complete'
     else:status='partial'
     if result.get('snapshot'):status='saved'
     return {'company':company,'origin':origin,'destination':destination,'status':status,
@@ -128,9 +128,9 @@ class BulkManager:
             # never remain downloadable after the comparison semantics change.
             for job in db.execute('SELECT id,config FROM jobs').fetchall():
                 config=json.loads(job['config'])
-                if config.get('tariff_schema')==51:continue
-                convert_weights=config.get('tariff_schema')!=50
-                config.update(companies=[c for c in config['companies'] if c in e.COMPANIES],tariff_schema=51)
+                if config.get('tariff_schema')==52:continue
+                convert_weights=config.get('tariff_schema') not in {50,51}
+                config.update(companies=[c for c in config['companies'] if c in e.COMPANIES],tariff_schema=52)
                 for result in (db.execute('SELECT idx,company,payload FROM results WHERE job=?',(job['id'],)).fetchall() if convert_weights else []):
                     if result['company'] not in e.COMPANIES:
                         db.execute('DELETE FROM results WHERE job=? AND idx=? AND company=?',(job['id'],result['idx'],result['company']));continue
@@ -193,7 +193,7 @@ class BulkManager:
             if self.active() or self.route_busy():raise BusyError('Дождитесь текущего обновления или приостановите общий сбор')
             if self.export_worker and self.export_worker.is_alive():raise BusyError('Дождитесь завершения создания Excel')
             ident='bulk-'+uuid.uuid4().hex
-            config={'scope':scope,'origins':origins,'destinations':destinations,'companies':list(e.COMPANIES),'tariff_schema':51,
+            config={'scope':scope,'origins':origins,'destinations':destinations,'companies':list(e.COMPANIES),'tariff_schema':52,
                     'mode':mode,'include_imports':bool(include_imports)}
             with self.db() as db:
                 db.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?)',
@@ -359,7 +359,7 @@ class BulkManager:
             info={k:job[k] for k in ('job_id','created_at','updated_at','status','total_routes','completed_routes','completed_checks','total_checks','outcomes')}
             info['include_imports']=config.get('include_imports',True);info['mode']=config.get('mode','online')
             files=[]
-            coverage={c:{'company':c,'online':0,'document':0,'missing':0} for c in e.COMPANIES}
+            coverage={c:{'company':c,'online':0,'saved':0,'document':0,'missing':0} for c in e.COMPANIES}
             for number,part in enumerate(parts,1):
                 index={(r['origin'],r['destination']):r['idx'] for r in part}
                 # One version of user documents for the whole workbook. Online
@@ -372,7 +372,7 @@ class BulkManager:
                     for row in rows:
                         if row['profile']['id']=='min':continue
                         for item in row['items']:
-                            key=('document' if item.get('uploaded') else 'online') if tariff_value(item,row['profile']) is not None else 'missing'
+                            key=('document' if item.get('uploaded') else 'online' if item.get('collected_online') else 'saved') if tariff_value(item,row['profile']) is not None else 'missing'
                             coverage[item['company']][key]+=1
                     return rows
                 content=export_bytes(*next(iter(index)),list(e.COMPANIES),live_only=False,include_imports=False,

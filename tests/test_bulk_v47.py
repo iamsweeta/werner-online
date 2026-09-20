@@ -75,7 +75,7 @@ class BulkCollection(unittest.TestCase):
             self.assertIn('Сбор',wb.sheetnames);self.assertEqual(wb.active.title,'Графики')
             self.assertIn('Проверено при сборе',[r[5] for r in list(wb['Источники'].values)[1:]])
             self.assertEqual(wb['Пролайн']['E2'].value,None)
-    def test_snapshot_excludes_imports_old_attempts_and_later_overwrites(self):
+    def test_snapshot_retains_old_attempts_without_live_and_excludes_later_overwrites(self):
         o,d='Казань','Уфа';c='Пролайн'
         self.save(c,o,d,{'w100':1})
         result=self.save(c,o,d,{'w001':700})
@@ -83,11 +83,12 @@ class BulkCollection(unittest.TestCase):
         with patch('app.document_imports.pack',return_value=imported):payload=b.capture_company(c,o,d,result)
         by={i['profile_id']:i for i in payload['items']}
         self.assertEqual(by['w001']['price'],700);self.assertEqual(by['min']['price'],700)
-        self.assertIsNone(by['w100']['price']);self.assertFalse(by['w001']['uploaded'])
+        self.assertEqual(by['w100']['price'],1);self.assertFalse(by['w100']['collected_online']);self.assertFalse(by['w001']['uploaded'])
         self.save(c,o,d,{'w001':9000})
         self.assertEqual(by['w001']['price'],700)
         failed=b.capture_company(c,o,d,{'company':c,'ok':False,'message':'Offline'})
-        self.assertTrue(all(i['price'] is None for i in failed['items']))
+        self.assertEqual(next(i for i in failed['items'] if i['profile_id']=='w001')['price'],9000)
+        self.assertTrue(all(not i['collected_online'] for i in failed['items']))
     def test_pause_resume_checkpoints_and_route_busy_conflict(self):
         entered=threading.Event();release=threading.Event();calls=[]
         def collect(companies,o,d,*args,**kwargs):

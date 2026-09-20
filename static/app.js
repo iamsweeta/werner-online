@@ -11,7 +11,7 @@ const state = {
   options:null, comparison:null, matrix:null, busy:false, bulkActive:false,
   compareSeq:0, compareController:null, optionsSeq:0, optionsController:null,
   refreshingRoutes:new Set(), refreshedRoutes:new Set(),
-  companiesInitialized:false, autoRefresh:true, refreshLocked:false, calculationCompanies:new Set(), hiddenGraphCompanies:new Set(), graphScope:'small', unitMode:'total', liveOnly:false, includeImports:true
+  companiesInitialized:false, refreshLocked:false, calculationCompanies:new Set(), hiddenGraphCompanies:new Set(), graphScope:'small', unitMode:'total', liveOnly:false, includeImports:true
 };
 
 function toast(message){ const n=$('toast'); n.textContent=message; n.classList.add('visible'); clearTimeout(window.__toast); window.__toast=setTimeout(()=>n.classList.remove('visible'),3600); }
@@ -51,7 +51,7 @@ function exactViewValue(item, profile){
 }
 function updateUnitLabels(){
   const note=$('unitModeNote');if(note)note.textContent=state.unitMode==='per_kg'?'₽/кг = стоимость отправки ÷ контрольный вес. Это расчётная величина, включая минимальную плату. МИН всегда в ₽.':'Показана стоимость всей отправки на контрольном весе. МИН — минимальная стоимость отправления по компании.';
-  const heavy=$('graphScopeSelect')?.querySelector('option[value=heavy]'); if(heavy) heavy.textContent=state.unitMode==='per_kg'?'От 100 кг · расчётная стоимость, ₽/кг':'От 100 кг · ₽ за отправку';
+  for(const [key,label] of Object.entries({small:'0–50 кг',medium:'100–1500 кг',heavy:'1500–5000 кг'})){const option=$('graphScopeSelect')?.querySelector(`option[value=${key}]`);if(option)option.textContent=label+' · '+(state.unitMode==='per_kg'?'расчётная стоимость, ₽/кг':'₽ за отправку');}
   const ps=$('profileSelect'); const profiles=state.options?.profiles||[];
   if(ps && profiles.length){ const selected=ps.value; ps.innerHTML=profiles.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.description)} · ${escapeHtml(p.is_minimum_profile?'Минимум':state.unitMode==='per_kg'?'Расчётная стоимость':'Стоимость отправки')} · ${escapeHtml(activeUnit(p))}</option>`).join(''); if(profiles.some(p=>p.id===selected)) ps.value=selected; }
 }
@@ -89,12 +89,12 @@ function setAllCompanies(on){ state.calculationCompanies.clear(); if(on)(state.o
 function visiblePrice(item){return !state.liveOnly || item?.online || (state.includeImports && item?.uploaded);}
 function statusLabel(item){
   if(item?.uploaded)return 'Файл пользователя';
-  if(item?.online) return item?.price_is_minimum?'LIVE · цена «от»':'LIVE';
+  if(item?.online) return item?.price_is_minimum?'Обновлено · цена «от»':'Обновлено · LIVE';
   if(item?.refresh_status==='unavailable' && item?.status!=='ok') return 'Прайс маршрута не опубликован';
   const failed=item?.refresh_status==='failed';
-  if(item?.price_is_minimum) return failed?'FAILED / LAST GOOD · цена «от»':'LAST GOOD · цена «от»';
-  if(item?.status==='ok') return failed?'FAILED / LAST GOOD':'LAST GOOD';
-  if(item?.status==='document_unavailable'||item?.status==='unavailable') return failed?'FAILED · нет LAST GOOD':'Нет подтверждённой строки';
+  if(item?.price_is_minimum) return failed?'Не обновилось · сохранённая цена «от»':'Сохранённая цена «от»';
+  if(item?.status==='ok') return item?.refresh_status==='running'?'Обновляется · прежняя цена':failed||item?.latest_availability||item?.refresh_status==='partial'?'Не обновилось · прежняя цена':'Сохранённая цена';
+  if(item?.status==='document_unavailable'||item?.status==='unavailable') return failed?'Не загрузилось · сохранённой цены нет':'Нет подтверждённой строки';
   return item?.status||'Нет данных';
 }
 function errorBlock(info, raw=''){
@@ -114,13 +114,13 @@ function syncRetryButtons(){
 function sourceBlock(item){
   const url=item?.source_url; const note=truncate(item?.message||item?.formula||'',180);
   const hasData=numeric(item?.comparison_value)||(item?.price_is_minimum&&numeric(item?.price));
-  const mode=item?.uploaded?'ФАЙЛ ПОЛЬЗОВАТЕЛЯ':item?.online?'LIVE':(hasData?'LAST GOOD':(item?.refresh_status==='failed'?'FAILED':'НЕ ЗАГРУЖЕНО'));
+  const mode=item?.uploaded?'ФАЙЛ ПОЛЬЗОВАТЕЛЯ':item?.online?'LIVE':(hasData?'СОХРАНЁННАЯ ЦЕНА':(item?.refresh_status==='failed'?'ОШИБКА ЗАГРУЗКИ':'НЕ ЗАГРУЖЕНО'));
   const file=item?.source_file?`<a href="${item.uploaded?'/api/import-file/':'/api/source-file/'}${encodeURIComponent(item.source_file)}" target="_blank" rel="noopener">${item.uploaded?escapeHtml(item.original_filename||'Загруженный документ'):'Скачанный прайс'}</a>`:'';
   const taxes=item?.tax_basis?`<span>${escapeHtml(item.tax_basis)}</span>`:'';
   const basis=item?.calculation_basis?`<span>${escapeHtml(item.calculation_basis)}</span>`:'';
   const error=item?.refresh_error?errorBlock(item.error_info,item.refresh_error):'';
   const documentDate=item?.uploaded?`<span>Дата в документе: ${escapeHtml(item.document_date||'не распознана')}</span>`:'';
-  const time=item?.captured_at?` · ${escapeHtml(item.captured_at)}`:'';
+  const time=item?.captured_at?` · ${escapeHtml(new Date(item.captured_at).toLocaleString('ru-RU'))}`:'';
   const transport=item?.origin_terminal?` · Терминал отправления: ${escapeHtml(item.origin_terminal)}`:'';
   return `<div class="source-block"><strong>${escapeHtml(item?.source_type||'Источник')}</strong><span><b>${escapeHtml(mode)}</b>${time}${transport}${note?` · ${escapeHtml(note)}`:''}</span>${url?`<a href="${escapeHtml(url)}" target="_blank" rel="noopener">Открыть источник</a>`:''}${file}${documentDate}${taxes}${basis}${error}</div>`;
 }
@@ -138,8 +138,8 @@ function renderTariffGraph(data){
   if(!host || !legend) return;
   const scope=state.graphScope||'small';
   let rows=(data?.profiles||[]).filter(r=>!r.profile?.is_minimum_profile);
-  if(scope==='heavy') rows=rows.filter(r=>Number(r.profile?.weight_kg||0)>=100);
-  else rows=rows.filter(r=>Number(r.profile?.weight_kg||0)<=50);
+  const [minWeight,maxWeight]=({small:[0,50],medium:[100,1500],heavy:[1500,5000]})[scope]||[0,50];
+  rows=rows.filter(r=>Number(r.profile?.weight_kg)>0&&Number(r.profile.weight_kg)>=minWeight&&Number(r.profile.weight_kg)<=maxWeight);
   const companies=(state.options?.companies||[]).filter(c=>state.calculationCompanies.has(c.id));
   if(!rows.length || !companies.length){ host.innerHTML='<div class="empty">Нет данных для выбранного масштаба графика.</div>'; legend.innerHTML=''; return; }
   const series=companies.map((company,idx)=>{
@@ -179,7 +179,7 @@ function renderTariffGraph(data){
     points.filter(Boolean).forEach(p=>paths.push(`<circle cx="${p.x}" cy="${p.y}" r="4" class="graph-series-point" style="--series-color:${s.color}"><title>${escapeHtml(s.label)} · ${escapeHtml(p.label)} · ${escapeHtml(fmt(p.v,activeUnit(rows[0]?.profile)))}</title></circle>`));
   });
   const graphUnit=activeUnit(rows[0]?.profile);
-  const scopeText=scope==='heavy'?`от 100 кг · ${graphUnit}`:`0–50 кг · ${graphUnit}`;
+  const scopeText=`${minWeight}–${maxWeight} кг · ${graphUnit}`;
   host.innerHTML=`<div class="graph-scroll"><svg class="tariff-graph" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="График тарифов компаний по весовым диапазонам"><text x="18" y="${m.top+plotH/2}" transform="rotate(-90 18 ${m.top+plotH/2})" class="graph-axis-title">${graphUnit}</text>${marker}${grid.join('')}<line x1="${m.left}" x2="${width-m.right}" y1="${m.top+plotH}" y2="${m.top+plotH}" class="graph-axis"/>${paths.join('')}${xLabels}</svg></div><div class="graph-note">Масштаб: ${scopeText}. Минимум по видимым точкам ${fmt(rawMin,graphUnit)}, максимум ${fmt(rawMax,graphUnit)}. Строка «МИН» и цены «от» не строятся. Текстовая пометка означает отсутствие сопоставимой числовой ставки, а не ноль.</div>`;
 }
 function renderComparison(data){
@@ -227,7 +227,7 @@ function renderMatrix(data){
   $('matrixBody').innerHTML=(data.profiles||[]).map(row=>{
     const by=Object.fromEntries((row.items||[]).map(x=>[x.company,x]));
     const rowUnit=activeUnit(row.profile);
-    const cells=companies.map(c=>{ const item=by[c.id]||{}; const hiddenByFreshness=!visiblePrice(item); let text=item.availability==='on_request'?'по запросу':hiddenByFreshness?(numeric(item.price)?'—':'нет данных'):(item.display_text||'нет данных'); let cls='empty-cell'; const v=hiddenByFreshness?null:exactViewValue(item,row.profile); if(numeric(v)){ text=fmt(v,rowUnit); cls='value-matrix'; } else if(!hiddenByFreshness&&item.price_is_minimum&&numeric(item.price)){ text=rowUnit==='₽/кг'?'— (от '+fmtMoney(item.price)+')':`от ${fmtMoney(item.price)}`; cls='lower-cell'; } if(!hiddenByFreshness&&!numeric(v)&&numeric(item.comparison_value)&&rowUnit==='₽/кг')text='нет ставки'; return `<td class="${cls}" title="${escapeHtml(cleanText(item.message||''))}">${escapeHtml(text)}</td>`; }).join('');
+    const cells=companies.map(c=>{ const item=by[c.id]||{}; const hiddenByFreshness=!visiblePrice(item); let text=item.availability==='on_request'?'по запросу':hiddenByFreshness?(numeric(item.price)?'—':'нет данных'):(item.display_text||'нет данных'); let cls='empty-cell'; const v=hiddenByFreshness?null:exactViewValue(item,row.profile); if(numeric(v)){ text=fmt(v,rowUnit); cls='value-matrix'; } else if(!hiddenByFreshness&&item.price_is_minimum&&numeric(item.price)){ text=rowUnit==='₽/кг'?'— (от '+fmtMoney(item.price)+')':`от ${fmtMoney(item.price)}`; cls='lower-cell'; } if(!hiddenByFreshness&&!numeric(v)&&numeric(item.comparison_value)&&rowUnit==='₽/кг')text='нет ставки'; return `<td class="${cls}" title="${escapeHtml([statusLabel(item),item.captured_at?new Date(item.captured_at).toLocaleString('ru-RU'):'',cleanText(item.message||'')].filter(Boolean).join(' · '))}">${escapeHtml(text)}</td>`; }).join('');
     return `<tr class="shipment-row"><td class="range-cell"><strong>${escapeHtml(row.profile.range_weight)}</strong></td><td class="type-cell">${escapeHtml(row.profile.is_minimum_profile?'Минимум':state.unitMode==='per_kg'?'Расчётная стоимость':'Стоимость отправки')}</td><td class="unit-cell">${escapeHtml(rowUnit)}</td>${cells}</tr>`;
   }).join('');
 }
@@ -235,8 +235,8 @@ function renderMatrix(data){
 function renderIntegrations(statuses){
   const items=(state.options?.integrations||[]).filter(x=>state.calculationCompanies.has(x.id));
   $('integrationGrid').innerHTML=items.map(item=>{
-    const rows=Number(item.evidence_rows||item.embedded_rows||0); const liveRows=Number(item.collected_rows||0); const updated=item.last_collected_at?new Date(item.last_collected_at).toLocaleString('ru-RU'):'нет успешного LIVE';
-    const rs=String(item.refresh_status||'not_run'); const stateLabel=rs==='success'?(liveRows?'LIVE OK':'LAST GOOD'):rs==='partial'?'LIVE PARTIAL':rs==='failed'?'FAILED / LAST GOOD':rs==='running'?'ОБНОВЛЯЕТСЯ':'LAST GOOD';
+    const rows=Number(item.evidence_rows||item.embedded_rows||0); const liveRows=Number(item.collected_rows||0); const updated=item.last_collected_at?new Date(item.last_collected_at).toLocaleString('ru-RU'):'ещё не было';
+    const rs=String(item.refresh_status||'not_run'); const stateLabel=rs==='success'?(liveRows?'Обновлено':'Сохранённые цены'):rs==='partial'?'Обновлено частично':rs==='failed'?'Не обновилось':rs==='running'?'Обновляется':rs==='unavailable'?'Источник недоступен':'Ещё не обновляли';
     const err=Array.isArray(item.collection_errors)&&item.collection_errors.length?errorBlock(item.error_info,item.collection_errors[0]):'';
     return `<article class="integration-item"><div class="integration-top"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(stateLabel)}</span></div><p>${escapeHtml(item.method||'')}</p><small>Подтверждённых строк: ${rows} · LIVE сейчас: ${liveRows} · последний успех: ${escapeHtml(updated)}</small>${item.source_url?`<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener">Официальный источник</a>`:''}${err}</article>`;
   }).join('');
@@ -330,14 +330,12 @@ async function refreshRouteSources(force=false,onlyCompanies=null){
   }catch(e){$('liveAuditTitle').textContent='Не удалось начать загрузку';$('liveAuditText').textContent=e.message;toast(e.message);}
   finally{if(!state.refreshingRoutes.size)setRefreshRouteLock(false);}
 }
-async function maybeRefresh(){if(state.workspace==='route'&&state.autoRefresh&&!state.bulkActive&&!state.refreshingRoutes.size)await refreshRouteSources(false);}
 async function updateSources(){await refreshRouteSources(true);}
 async function resumeRefresh(){
   const active=await getJSON('/api/active-collect');
   if(active.mode==='bulk'){await monitorBulk(active.bulk_job_id);return;}
   if(active.status!=='idle'){await loadOptions(active.origin,active.destination);await compare();await monitorJob(active);return;}
   await compare();
-  await maybeRefresh();
 }
 
 function exportExcel(){ window.location.href=`/api/export/route?${queryString()}`; }
@@ -495,7 +493,7 @@ async function applyImport(){
     $('importMessage').textContent=`Применено ${data.rows} строк. Источник: файл пользователя.`;
     state.calculationCompanies.add(data.company);
     // Make the explicitly applied document visible immediately, including export.
-    state.liveOnly=true;state.includeImports=true;$('liveModeSelect').value='mixed';localStorage.setItem('tariff-source-mode-v450','mixed');
+    state.liveOnly=false;state.includeImports=true;$('liveModeSelect').value='all';
     await loadOptions(data.origin,data.destination);await compare();
   }catch(e){$('importMessage').textContent=e.message;}
   finally{importBusy(false);}
@@ -532,16 +530,16 @@ function setTheme(next){
   if(state.matrix)renderTariffGraph(state.matrix);
 }
 function toggleTheme(){setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');}
-async function init(){ if(typeof updateThemeButton==='function')updateThemeButton(); state.unitMode=localStorage.getItem('tariff-unit-mode-v50')==='per_kg'?'per_kg':'total'; const sourceMode=localStorage.getItem('tariff-source-mode-v450')||'mixed'; state.liveOnly=sourceMode!=='all'; state.includeImports=sourceMode!=='live'; if($('unitModeSelect')) $('unitModeSelect').value=state.unitMode; if($('liveModeSelect')) $('liveModeSelect').value=sourceMode; updateUnitLabels(); let route={origin:'Санкт-Петербург',destination:'Москва'}; try{route={...route,...JSON.parse(localStorage.getItem('tariff-route-v44')||'{}')};}catch{} try{await loadOptions(route.origin,route.destination);}catch{await loadOptions('Санкт-Петербург','Москва');} $('profileSelect').value='w100'; await compare(); state.autoRefresh=localStorage.getItem('tariff-auto-refresh-v424')!=='0'; $('autoRefreshToggle').checked=state.autoRefresh; if(typeof initWorkspace==='function')initWorkspace(); initBulk(); resumeRefresh().catch(e=>toast(e.message)); }
+async function init(){ if(typeof updateThemeButton==='function')updateThemeButton(); state.unitMode=localStorage.getItem('tariff-unit-mode-v50')==='per_kg'?'per_kg':'total'; const sourceMode='all'; state.liveOnly=sourceMode!=='all'; state.includeImports=sourceMode!=='live'; if($('unitModeSelect')) $('unitModeSelect').value=state.unitMode; if($('liveModeSelect')) $('liveModeSelect').value=sourceMode; updateUnitLabels(); let route={origin:'Санкт-Петербург',destination:'Москва'}; try{route={...route,...JSON.parse(localStorage.getItem('tariff-route-v44')||'{}')};}catch{} try{await loadOptions(route.origin,route.destination);}catch{await loadOptions('Санкт-Петербург','Москва');} $('profileSelect').value='w100'; await compare(); if(typeof initWorkspace==='function')initWorkspace(); initBulk(); resumeRefresh().catch(e=>toast(e.message)); }
 
 
 async function changeRoute(origin,destination){
-  try { if(await loadOptions(origin,destination)){localStorage.setItem('tariff-route-v44',JSON.stringify({origin:$('originSelect').value,destination:$('destinationSelect').value}));await compare();await maybeRefresh();} }
+  try { if(await loadOptions(origin,destination)){localStorage.setItem('tariff-route-v44',JSON.stringify({origin:$('originSelect').value,destination:$('destinationSelect').value}));await compare();} }
   catch(e){toast(e.message);}
 }
 if($('swapRouteButton')) $('swapRouteButton').addEventListener('click',()=>changeRoute($('destinationSelect').value,$('originSelect').value));
 $('originSelect').addEventListener('change',()=>changeRoute($('originSelect').value,$('destinationSelect').value));
-$('destinationSelect').addEventListener('change',()=>changeRoute($('originSelect').value,$('destinationSelect').value)); $('profileSelect').addEventListener('change',()=>{ const p=(state.options?.profiles||[]).find(x=>x.id===$('profileSelect').value); if(state.graphScope!=='all' && p && !p.is_minimum_profile){ state.graphScope=Number(p.weight_kg||0)<=50?'small':'heavy'; $('graphScopeSelect').value=state.graphScope; } compare().then(maybeRefresh); });
+$('destinationSelect').addEventListener('change',()=>changeRoute($('originSelect').value,$('destinationSelect').value)); $('profileSelect').addEventListener('change',()=>{ const p=(state.options?.profiles||[]).find(x=>x.id===$('profileSelect').value); if(state.graphScope!=='all' && p && !p.is_minimum_profile){ state.graphScope=Number(p.weight_kg||0)<=50?'small':Number(p.weight_kg||0)<=1500?'medium':'heavy'; $('graphScopeSelect').value=state.graphScope; } compare(); });
 $('graphScopeSelect').addEventListener('change',()=>{ state.graphScope=$('graphScopeSelect').value; if(state.matrix) renderTariffGraph(state.matrix); }); if($('unitModeSelect')) $('unitModeSelect').addEventListener('change',()=>{ state.unitMode=$('unitModeSelect').value==='per_kg'?'per_kg':'total'; localStorage.setItem('tariff-unit-mode-v50',state.unitMode); rerenderUnitMode(); }); if($('liveModeSelect')) $('liveModeSelect').addEventListener('change',()=>{ state.liveOnly=$('liveModeSelect').value!=='all'; state.includeImports=$('liveModeSelect').value!=='live'; localStorage.setItem('tariff-source-mode-v450',$('liveModeSelect').value); if(state.comparison) renderComparison(state.comparison); if(state.matrix){renderMatrix(state.matrix);renderTariffGraph(state.matrix);} }); $('compareButton').addEventListener('click',compare);
 $('selectAllCompaniesButton').addEventListener('click',()=>setAllCompanies(true)); $('clearCompaniesButton').addEventListener('click',()=>setAllCompanies(false));
 $('retryFailedButton').addEventListener('click',()=>{const failed=(state.comparison?.items||[]).filter(r=>['failed','partial'].includes(r.refresh_status)&&state.calculationCompanies.has(r.company)).map(r=>r.company);if(failed.length)refreshRouteSources(true,failed);});
@@ -552,7 +550,6 @@ $('diagnosticsButton').addEventListener('click',()=>{window.location.href='/api/
 $('collectButton').addEventListener('click',updateSources); $('exportButton').addEventListener('click',exportExcel); $('themeButton').addEventListener('click',toggleTheme);
 $('settingsButton').addEventListener('click',openSettings); $('closeSettingsButton').addEventListener('click',closeSettings); $('closeSettingsIcon').addEventListener('click',closeSettings); $('saveSettingsButton').addEventListener('click',saveSettings);
 $('settingsDialog').addEventListener('click',e=>{if(e.target===$('settingsDialog'))closeSettings();});
-$('autoRefreshToggle').addEventListener('change',()=>{state.autoRefresh=$('autoRefreshToggle').checked;localStorage.setItem('tariff-auto-refresh-v424',state.autoRefresh?'1':'0');maybeRefresh();});
 setInterval(()=>{if(!document.hidden&&!state.refreshingRoutes.size)resumeRefresh().catch(()=>{});},60000);
 init().catch(e=>toast(e.message));
 

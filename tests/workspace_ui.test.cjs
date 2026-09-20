@@ -61,7 +61,7 @@ async function until(fn){for(let i=0;i<400;i++){if(fn())return;await pause(5)}th
  $('documentCommitButton').click();await until(()=>commits===1&&$('documentPreview').hidden&&$('documentsList').textContent.includes('test.csv'));
  await until(()=>$('bulkDownload').hidden);assert.match($('bulkStatus').textContent,/Пересоберите/);assert.equal($('bulkExportButton').hidden,false);
  assert.equal($('documentsList').querySelector('a').getAttribute('href'),'/api/import-file/'+documentJob.token+'.csv');
- $('routeTab').click();assert.equal($('routeWorkspace').hidden,false);await until(()=>routeCollect===1);
+ $('routeTab').click();assert.equal($('routeWorkspace').hidden,false);await pause(20);assert.equal(routeCollect,0,'opening the route never starts a collection');
  assert.match(w.exportExcel.toString(),/\/api\/export\/route\?/);
  $('documentsTab').click();$('documentsTab').dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));assert.equal($('bulkPanel').hidden,false);
  assert.equal($('bulkOpenButton').getAttribute('aria-selected'),'true');assert.equal($('routeTab').getAttribute('aria-selected'),'false');

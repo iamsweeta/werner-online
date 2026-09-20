@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import math
 import re
 import time
@@ -10,7 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-RUNTIME_DIR = BASE_DIR / "runtime"
+RUNTIME_DIR = Path(os.environ.get("TARIFF_DATA_DIR") or BASE_DIR / "runtime").expanduser().resolve()
 CACHE_DIR = RUNTIME_DIR / "cache"
 DOWNLOAD_DIR = RUNTIME_DIR / "downloads"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)

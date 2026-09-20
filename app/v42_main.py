@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="51.0"
+VERSION="52.0"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
@@ -438,7 +438,7 @@ def diagnostics(origin:str="Санкт-Петербург",destination:str="Мо
 def diagnostics_download(origin:str='Санкт-Петербург',destination:str='Москва',profile:str='w100'):
     report=diagnostics(origin,destination,profile)
     return Response(json.dumps(report,ensure_ascii=False,indent=2).encode('utf-8'),media_type='application/json',
-                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_51_0.json"'})
+                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_52_0.json"'})
 
 
 @app.get("/api/settings")
@@ -454,7 +454,7 @@ async def settings_post(request:Request):
     _save_settings(allowed); return {"ok":True}
 
 @app.get("/api/export/excel")
-def export_excel(origin:str,destination:str,profile:str="w100",companies:str|None=None,view:str="total",live_only:bool=True,include_imports:bool=True,layout:str="customer",all_loaded:bool=False):
+def export_excel(origin:str,destination:str,profile:str="w100",companies:str|None=None,view:str="total",live_only:bool=False,include_imports:bool=True,layout:str="customer",all_loaded:bool=False):
     from io import BytesIO
     from openpyxl import Workbook
     if layout not in {'customer','matrix','route'}:raise HTTPException(400,'Неизвестный формат Excel')
@@ -534,7 +534,7 @@ def export_excel(origin:str,destination:str,profile:str="w100",companies:str|Non
 
 
 @app.get('/api/export/route')
-def export_route(origin:str,destination:str,companies:str|None=None,view:str='total',live_only:bool=True,include_imports:bool=True):
+def export_route(origin:str,destination:str,companies:str|None=None,view:str='total',live_only:bool=False,include_imports:bool=True):
     """Independent file containing only this route; never the customer book."""
     return export_excel(origin,destination,companies=companies,view=view,live_only=live_only,
                         include_imports=include_imports,layout='route',all_loaded=False)
