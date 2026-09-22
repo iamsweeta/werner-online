@@ -94,6 +94,9 @@ def preview(raw, filename, company, origin, destination):
     values,parsed=parse_document(raw,filename,company,origin,destination)
     _check_values(values)
     warnings=['Это документ пользователя. Его загрузка не подтверждает, что перевозчик применяет эти цены сейчас.']
+    if parsed.get('ocr'):
+        from .scan_ocr import WARNING
+        warnings.insert(0,WARNING)
     stamp=parsed.get('document_date')
     if stamp:
         d=date.fromisoformat(stamp)

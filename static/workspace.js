@@ -57,7 +57,7 @@ function selectDocuments(files){
   if(documentState.busy)return;
   resetDocumentPreview();documentState.files=Array.from(files||[]);documentState.file=documentState.files[0]||null;
   const size=documentState.files.reduce((n,f)=>n+f.size,0);
-  wsEl('documentFileName').textContent=documentState.files.length?`${documentState.files.length} файлов · ${(size/1024/1024).toFixed(1)} МБ · ${documentState.files.map(f=>f.name).join(', ')}`:'Текстовый PDF, Excel, CSV или архив с документами';
+  wsEl('documentFileName').textContent=documentState.files.length?`${documentState.files.length} файлов · ${(size/1024/1024).toFixed(1)} МБ · ${documentState.files.map(f=>f.name).join(', ')}`:'PDF, включая скан ДЛ, Excel, CSV или архив с документами';
 }
 function renderConflicts(){
   const conflicts=documentState.job?.conflicts||[];wsEl('documentConflicts').hidden=!conflicts.length;
@@ -78,7 +78,7 @@ function renderDocumentRoute(){
     const conflict=(documentState.job.conflicts||[]).find(c=>c.origin===route.origin&&c.destination===route.destination&&c.profile_id===p.id);
     const unresolved=conflict&&documentState.resolutions[conflict.id]===undefined;
     const item=conflict&&!unresolved?conflict.options[documentState.resolutions[conflict.id]]:route.values[p.id],proof=item.source_page||route.meta?.source_page||item.source_row||route.meta?.source_row||'—';
-    return `<tr><td>${escapeHtml(p.label||p.range_weight)}</td><td class="value-cell">${unresolved?'Выберите цену':escapeHtml(rateProfile(p)?(numeric(item.rate_per_kg)?fmt(item.rate_per_kg,'₽/кг'):'нет ставки · сумма '+fmt(item.price)):fmt(item.price))}</td><td>${escapeHtml(item.original_filename||item.archive_member||'')} ${escapeHtml(proof)}</td></tr>`;
+    return `<tr><td>${escapeHtml(p.label||p.range_weight)}</td><td class="value-cell">${unresolved?'Выберите цену':escapeHtml(rateProfile(p)?(numeric(item.rate_per_kg)?fmt(item.rate_per_kg,'₽/кг'):'нет ставки · сумма '+fmt(item.price)):fmt(item.price))}</td><td>${escapeHtml(item.original_filename||item.archive_member||'')} ${escapeHtml(proof)}${route.meta?.ocr?' · OCR':''}</td></tr>`;
   }).join('');
 }
 function renderDocumentPreview(job){
@@ -88,7 +88,7 @@ function renderDocumentPreview(job){
   wsEl('documentWarnings').innerHTML=(job.warnings||[]).map(w=>`<li>${escapeHtml(w)}</li>`).join('');
   wsEl('documentRoutePreview').innerHTML=job.routes.map((r,i)=>`<option value="${i}">${escapeHtml(r.origin)} → ${escapeHtml(r.destination)} · ${Object.keys(r.values).length} цен</option>`).join('');
   wsEl('documentSkipped').hidden=!job.errors?.length;
-  wsEl('documentErrors').innerHTML=(job.errors||[]).map(r=>`<p>${escapeHtml(r.file||[r.origin,r.destination].filter(Boolean).join(' → '))}: ${escapeHtml(r.message)}</p>`).join('');
+  wsEl('documentErrors').innerHTML=(job.errors||[]).map(r=>`<p>${escapeHtml(r.file||[r.origin,r.destination].filter(Boolean).join(' → ')||(r.source_page?'Страница '+r.source_page:''))}: ${escapeHtml(r.message)}</p>`).join('');
   renderConflicts();renderDocumentRoute();
 }
 async function parsePriceDocument(){
@@ -103,7 +103,7 @@ async function parsePriceDocument(){
     let job=await getJSON('/api/price-documents/preview',{method:'POST',body:form});
     while(job.status==='parsing'){
       if(seq!==documentState.seq)return;
-      wsEl('documentMessage').textContent=job.total?`Проверено направлений: ${job.done}/${job.total}. Распознано: ${job.matched}.`:'Читаю документ и определяю маршруты…';
+      wsEl('documentMessage').textContent=job.total?`Проверено направлений: ${job.done}/${job.total}. Распознано: ${job.matched}.`:(job.message||'Читаю документ и определяю маршруты…');
       wsEl('documentProgress').value=job.total?100*job.done/job.total:0;
       await new Promise(r=>setTimeout(r,1200));job=await getJSON('/api/price-documents/preview/'+encodeURIComponent(job.token));
     }
@@ -143,7 +143,7 @@ async function refreshDocuments(){
     if(seq!==documentState.listSeq)return;
     wsEl('documentCountBadge').textContent=files.length?`(${files.length})`:'';
     if(!files.length){wsEl('documentsList').innerHTML='<p class="empty">Пока нет прайс-листов. Добавьте первый документ выше.</p>';return;}
-    wsEl('documentsList').innerHTML=files.map(f=>`<article class="document-item"><span class="document-icon">${escapeHtml((f.extension||'').slice(1).toUpperCase())}</span><div><h3>${escapeHtml(f.original_filename)}</h3><p>${escapeHtml(f.company)} · ${Number(f.route_count)} маршрутов · ${Number(f.values_count)} цен</p><small>Дата тарифов: ${escapeHtml(f.document_date||'не определена')} · загружен ${escapeHtml(new Date(f.uploaded_at).toLocaleString('ru-RU'))}</small></div><div class="file-actions"><a href="/api/import-file/${encodeURIComponent(f.source_file)}" target="_blank" rel="noopener">Оригинал</a><button class="text-button" type="button" data-document-routes="${escapeHtml(f.id)}">Выбрать маршрут из файла</button><button class="text-button" type="button" data-disable-document="${escapeHtml(f.id)}">Отключить</button></div><div class="document-route-picker" hidden></div></article>`).join('');
+    wsEl('documentsList').innerHTML=files.map(f=>`<article class="document-item"><span class="document-icon">${escapeHtml((f.extension||'').slice(1).toUpperCase())}</span><div><h3>${escapeHtml(f.original_filename)}</h3><p>${escapeHtml(f.company)} · ${Number(f.route_count)} маршрутов · ${Number(f.values_count)} цен${f.ocr?' · OCR':''}</p><small>Дата тарифов: ${escapeHtml(f.document_date||'не определена')} · загружен ${escapeHtml(new Date(f.uploaded_at).toLocaleString('ru-RU'))}</small></div><div class="file-actions"><a href="/api/import-file/${encodeURIComponent(f.source_file)}" target="_blank" rel="noopener">Оригинал</a><button class="text-button" type="button" data-document-routes="${escapeHtml(f.id)}">Выбрать маршрут из файла</button><button class="text-button" type="button" data-disable-document="${escapeHtml(f.id)}">Отключить</button></div><div class="document-route-picker" hidden></div></article>`).join('');
     wsEl('documentsList').querySelectorAll('[data-document-routes]').forEach(btn=>btn.addEventListener('click',()=>openDocumentRoutes(btn)));
     wsEl('documentsList').querySelectorAll('[data-disable-document]').forEach(btn=>btn.addEventListener('click',async()=>{
       btn.disabled=true;

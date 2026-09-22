@@ -470,9 +470,9 @@ async function previewImport(){
   if(file.size>20*1024*1024){$('importMessage').textContent='Файл превышает 20 МБ.';return;}
   const seq=importsState.seq;const form=new FormData();
   Object.entries({...importsState.route,company:$('importCompany').value}).forEach(([k,v])=>form.append(k,v));form.append('file',file);
-  importBusy(true);$('importMessage').textContent='Читаю таблицы и проверяю направление…';
+  importBusy(true);$('importMessage').textContent='Читаю таблицы и проверяю направление… Для скана ДЛ OCR может занять несколько минут; дождитесь предпросмотра.';
   try{
-    const data=await getJSON('/api/import/preview',{method:'POST',body:form,timeout:120000});
+    const data=await getJSON('/api/import/preview',{method:'POST',body:form,timeout:630000});
     if(seq!==importsState.seq||!$('importDialog').open)return;
     importsState.token=data.token;
     $('importMessage').textContent=`Распознано ${data.rows.length} из ${state.options.profiles.length} строк. Цены ещё не применены.`;

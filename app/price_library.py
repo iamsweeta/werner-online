@@ -176,6 +176,8 @@ def remove(ident):
 def _candidates(raw,filename,company,origin):
     ext=Path(filename).suffix.lower();pairs=set();origins=set();destinations=set()
     if ext=='.pdf':
+        from . import scan_ocr
+        if scan_ocr.needed(raw):return scan_ocr.pairs(scan_ocr.prepare(raw,company),origin)
         reader=t.pdf_reader(raw);first=reader.pages[0].extract_text() or ''
         text='\n'.join(p.extract_text() or '' for p in reader.pages)
         if not text.strip():raise ValueError('В PDF нет текстового слоя. Используйте текстовый PDF или XLSX-шаблон для прайса.')
@@ -265,6 +267,9 @@ def parse_routes(raw,filename,company,origin=None,on_progress=None,conflicts=Non
         return output,errors
     with t.parsing_session():
         candidates=_candidates(raw,filename,company,origin);output={};errors=[];deadline=time.monotonic()+240
+        if Path(filename).suffix.lower()=='.pdf':
+            from . import scan_ocr
+            if scan_ocr.needed(raw):errors.extend(scan_ocr.prepare(raw,company).get('errors',[]))
         if not candidates:raise ValueError('В документе нет маршрутов выбранной компании или города. Проверьте выбор и формат таблицы.')
         for i,(o,d) in enumerate(candidates):
             if time.monotonic()>deadline:raise ValueError('Проверка документа заняла более 4 минут. Выберите один город отправления или разделите файл.')
@@ -302,6 +307,10 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
         JOBS[token]={'token':token,'status':'parsing','company':company,'filename':name,'created_at':e._now(),
                      'done':0,'total':0,'matched':0,'message':'Читаю документ…'}
     def run():
+        from . import scan_ocr
+        def ocr_progress(info):
+            with LOCK:JOBS[token].update(message=info['message'],ocr_page=info['done'],ocr_total=info['total'])
+        progress_token=scan_ocr._PROGRESS.set(ocr_progress)
         try:
             def progress(done,total,matched):
                 with LOCK:JOBS[token].update(done=done,total=total,matched=matched)
@@ -326,18 +335,22 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
                     if not value.get('document_date'):value['document_date']=document_date
                     if value.get('document_date') and date.fromisoformat(value['document_date'])>date.today():raise ValueError('В документе указана будущая дата тарифов')
             if conflicts:warnings.append('В файлах есть разные цены для одного маршрута и веса. Выберите нужную версию каждой цены ниже.')
+            has_ocr=any(r['meta'].get('ocr') for r in routes)
+            if has_ocr:warnings.insert(0,scan_ocr.WARNING)
             warnings.append('Загрузка заменит ранее сохранённый прайс этой компании для распознанных маршрутов. Части одного прайса загружайте вместе.')
             if not dates:warnings.append('Дата тарифов не определена. Проверьте актуальность документа.')
             if any((date.today()-date.fromisoformat(s)).days>30 for s in dates):warnings.append('В документе есть тарифы старше 30 дней. Проверьте, что они ещё действуют.')
             warnings.append('После подтверждения документ станет выбранным источником его направлений в «Одном маршруте» и большой таблице. Вернуть онлайн-приоритет можно выбором «Автоматически».')
             metadata={'token':token,'company':company,'original_filename':name,'extension':Path(name).suffix.lower(),
-                      'sha256':hashlib.sha256(raw).hexdigest(),'created_at':e._now(),'document_date':next(iter(dates)) if len(dates)==1 else None}
+                      'sha256':hashlib.sha256(raw).hexdigest(),'created_at':e._now(),'document_date':next(iter(dates)) if len(dates)==1 else None,
+                      'ocr':has_ocr}
             e._robust_json_write(pending/(token+'.json'),{'meta':metadata,'routes':routes,'conflicts':conflicts})
             (pending/(token+Path(name).suffix.lower())).touch()
             with LOCK:JOBS[token].update(created_at=metadata['created_at'],status='ready',routes=routes,conflicts=conflicts,warnings=warnings,errors=errors[:30],
                 skipped=len(errors),matched=len(routes),values_count=sum(len(r['values']) for r in routes),meta=metadata,message='Проверьте распознанные цены перед сохранением')
         except Exception as exc:
             with LOCK:JOBS[token].update(status='error',message=str(exc)[:1500])
+        finally:scan_ocr._PROGRESS.reset(progress_token)
     threading.Thread(target=run,daemon=True).start()
     return status(token)
 

@@ -329,7 +329,7 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
         "error_info":explain_error(refresh_error) if refresh_error else None,
         "source_file":item.get('source_file') if use_live or uploaded else None,
         "sha256":item.get('sha256') if use_live or uploaded else None,
-        **{k:item.get(k) for k in ('original_filename','uploaded_at','document_date','source_page','source_pages','source_row','archive_member','tariff_kind','weight_from','weight_to','tax_basis')},
+        **{k:item.get(k) for k in ('original_filename','uploaded_at','document_date','source_page','source_pages','source_row','archive_member','tariff_kind','weight_from','weight_to','tax_basis','ocr')},
         "calculation_basis":item.get('calculation_basis') or 'Опубликованный тариф по весу; объём и дополнительные услуги не включены',
         "volume_m3":item.get('volume_m3'),
     }

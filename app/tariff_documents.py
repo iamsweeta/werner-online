@@ -26,6 +26,9 @@ _SESSION=ContextVar('tariff_document_session',default=None)
 
 @contextmanager
 def parsing_session():
+    if _SESSION.get() is not None:
+        yield
+        return
     token=_SESSION.set({})
     try:yield
     finally:_SESSION.reset(token)
@@ -78,7 +81,7 @@ def validate_file(raw, filename):
         raise ValueError('Загрузите непустой документ размером не более 20 МБ')
     ext = PurePosixPath(normalize_filename(filename)).suffix.lower()
     if ext not in {'.pdf', '.xls', '.xlsx', '.zip', '.csv'}:
-        raise ValueError('Поддерживаются PDF с текстом, XLS, XLSX, CSV и ZIP с прайс-листами')
+        raise ValueError('Поддерживаются PDF (включая сканы ДЛ), XLS, XLSX, CSV и ZIP с прайс-листами')
     cache=_SESSION.get();key=('valid',raw,ext)
     if cache is not None and key in cache:return ext
     if ext == '.pdf':
@@ -346,7 +349,7 @@ def parse_generic_pdf(raw, company, origin, destination):
     reader=pdf_reader(raw);vals={};page_numbers=[]
     all_text='\n'.join(p.extract_text() or '' for p in reader.pages)
     if not all_text.strip():
-        raise ValueError('В PDF нет текстового слоя (скан). Нужен текстовый PDF или XLSX; распознавание сканов OCR не включено.')
+        raise ValueError('В PDF нет текстового слоя. Для скана ДЛ выберите компанию ДЛ; для другого макета используйте текстовый PDF или XLSX.')
     fields={}
     for key in ('Компания','Откуда','Куда'):
         matches=re.findall(r'^\s*'+key+r'\s*:\s*(.*?)\s*$',all_text,re.M|re.I)
@@ -390,6 +393,9 @@ def parse_generic_pdf(raw, company, origin, destination):
 
 
 def parse_document(raw, filename, company, origin, destination):
+    if _SESSION.get() is None:
+        with parsing_session():
+            return parse_document(raw, filename, company, origin, destination)
     filename=normalize_filename(filename)
     values,meta=_parse_document(raw,filename,company,origin,destination)
     from .source_conditions import document_conditions
@@ -404,6 +410,9 @@ def _parse_document(raw, filename, company, origin, destination):
         if company!='Возовоз':raise ValueError('ZIP поддерживается для архива тарифов Возовоза; для других компаний выберите PDF/XLSX/XLS')
         return parse_vozovoz_zip(raw,origin,destination)
     if ext=='.pdf':
+        from . import scan_ocr
+        if scan_ocr.needed(raw):
+            return scan_ocr.parse(scan_ocr.prepare(raw,company),origin,destination)
         first=pdf_reader(raw).pages[0].extract_text() or ''
         if 'Тарифы на межтерминальную перевозку из' in first:
             if company!='ДЛ':raise ValueError('Это PDF Деловых Линий: выберите компанию ДЛ')
