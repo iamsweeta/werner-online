@@ -10,6 +10,8 @@ from . import v42_engine as e
 
 
 def cleanup_previews():
+    from .route_import_jobs import cleanup
+    cleanup()
     from .price_library import JOBS, LOCK
     with e.STATE_LOCK, LOCK:
         active={key for key,row in JOBS.items() if row.get('status')=='parsing'}

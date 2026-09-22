@@ -16,7 +16,7 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 </script>
 <title>Тарифы — большая таблица и прайс-листы</title>
 <link href="/static/favicon.svg" rel="icon" type="image/svg+xml"/>
-<link href="/static/styles.css?v=540" rel="stylesheet"/>
+<link href="/static/styles.css?v=550" rel="stylesheet"/>
 </head>
 <body>
 <div class="app-shell"><aside class="sidebar"><a class="brand" data-open-workspace="bulk" href="#"><span aria-hidden="true" class="brand-mark">Т</span><span><strong>Тарифы</strong><small>Работа с прайс-листами</small></span></a><nav aria-label="Разделы приложения" class="workspace-nav" role="tablist"><button aria-controls="bulkPanel" aria-selected="true" class="nav-item active" data-workspace="bulk" id="bulkOpenButton" role="tab"><span class="nav-number">01</span><span>Большая таблица</span></button><button aria-controls="routeWorkspace" aria-selected="false" class="nav-item" data-workspace="route" id="routeTab" role="tab"><span class="nav-number">02</span><span>Один маршрут</span></button><button aria-controls="documentsPanel" aria-selected="false" class="nav-item" data-workspace="documents" id="documentsTab" role="tab"><span class="nav-number">03</span><span>Прайс-листы</span></button></nav></aside>
@@ -176,7 +176,7 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 <div class="source-block import-company-guide" id="importCompanyGuide"></div>
 <details class="import-help"><summary>Какие документы можно загрузить?</summary>
 <p>Апостроф после расширения, например <code>pricelist.pdf'</code>, исправляется автоматически. Город отправления должен совпадать с заголовком: для прайса «из Санкт-Петербурга» выберите Санкт-Петербург, для московского — Москву. В библиотеке можно оставить автоматическое определение города.</p><p>ДЛ — текстовый PDF или скан с первой таблицей межтерминальных тарифов; Возовоз — Excel или ZIP с листом «Тарифы межтерм.перевозок»; КИТ и Новая Линия — текстовый PDF; Фортуна, ЭкспедицияПлюс, ПЭК и Рейл Континент — XLSX основного прайса.</p>
-<p>Для всех компаний доступен единый XLSX-шаблон. Общий текстовый PDF должен содержать «Компания: …», «Откуда: …», «Куда: …» и таблицу «Вес, кг | Цена, руб» с контрольными весами. Скан межтерминального прайса ДЛ распознаётся автоматически (OCR); страницы можно не поворачивать вручную. До 40 страниц скана, до 10 минут обработки. Другие сканированные макеты требуют XLSX-шаблона. Проверьте цены перед подтверждением.</p>
+<p>Для всех компаний доступен единый XLSX-шаблон. Общий текстовый PDF должен содержать «Компания: …», «Откуда: …», «Куда: …» и таблицу «Вес, кг | Цена, руб» с контрольными весами. Скан межтерминального прайса ДЛ распознаётся автоматически (OCR); страницы можно не поворачивать вручную. Распознавание идёт в фоне: окно можно закрыть. При повторном открытии для того же маршрута приложение проверит готовность. Цены применяются только после вашего подтверждения. До 40 страниц скана, до 10 минут обработки. Другие сканированные макеты требуют XLSX-шаблона. Проверьте цены перед подтверждением.</p>
 <p><a href="https://www.dellin.ru/documents/" rel="noopener" target="_blank">Прайсы ДЛ</a> · <a href="https://vozovoz.ru/tariffs/" rel="noopener" target="_blank">Сформировать прайс Возовоза</a></p>
 </details>
 <div class="company-actions">
@@ -219,7 +219,7 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 </form>
 </dialog>
 <div class="toast" id="toast" role="status"></div>
-<script src="/static/workspace.js?v=540"></script>
-<script src="/static/app.js?v=540"></script>
+<script src="/static/workspace.js?v=550"></script>
+<script src="/static/app.js?v=550"></script>
 </body>
 </html>

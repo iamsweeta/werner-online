@@ -13,7 +13,7 @@ from pathlib import Path
 
 BASE=Path(__file__).resolve().parent
 URL='http://127.0.0.1:8423'
-VERSION='54.0'
+VERSION='55.0'
 INSTALLATION_ID=hashlib.sha256(str(BASE.resolve()).encode()).hexdigest()[:16]
 
 def health(url=URL):

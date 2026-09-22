@@ -23,7 +23,7 @@ async function getJSON(url, options={}){
   try{
     const r=await fetch(url,{...options,signal:controller.signal,cache:'no-store'});
     const d=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(typeof d.detail==='string'?d.detail:(d.error||`HTTP ${r.status}`));
+    if(!r.ok){const error=new Error(typeof d.detail==='string'?d.detail:(d.error||`HTTP ${r.status}`));error.status=r.status;throw error;}
     return d;
   }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',cancel);}
 }
@@ -432,9 +432,28 @@ async function openSettings(){
   if(!dialog.open) dialog.showModal();
 }
 function closeSettings(){if($('settingsDialog').open)$('settingsDialog').close();}
-const importsState={seq:0,route:null,token:null,busy:false,companies:{}};
+const importsState={seq:0,route:null,token:null,busy:false,companies:{},jobId:null};
+const IMPORT_JOB_KEY='tariff-route-import-jobs-v55';
+function importJobKey(route=importsState.route){return JSON.stringify([route?.origin,route?.destination]);}
+function savedImportJob(){
+  try{return JSON.parse(localStorage.getItem(IMPORT_JOB_KEY)||'{}')[importJobKey()]||null;}catch{return null;}
+}
+function rememberImportJob(job){
+  try{
+    const saved=JSON.parse(localStorage.getItem(IMPORT_JOB_KEY)||'{}');
+    for(const key of Object.keys(saved)){if(Date.now()-Number(saved[key].saved_at)>3600000)delete saved[key];}
+    saved[importJobKey(job)]={...job,saved_at:Date.now()};localStorage.setItem(IMPORT_JOB_KEY,JSON.stringify(saved));
+  }catch{}
+}
+function forgetImportJob(jobId){
+  try{
+    const saved=JSON.parse(localStorage.getItem(IMPORT_JOB_KEY)||'{}');
+    for(const key of Object.keys(saved)){if(saved[key].job_id===jobId)delete saved[key];}
+    localStorage.setItem(IMPORT_JOB_KEY,JSON.stringify(saved));
+  }catch{}
+}
 function resetImportPreview(){
-  importsState.seq++;importsState.token=null;$('importPreview').hidden=true;
+  importsState.seq++;importsState.token=null;importsState.jobId=null;$('importPreview').hidden=true;
   $('importConfirmed').checked=false;$('importApplyButton').disabled=true;$('importMessage').textContent='';
 }
 function importBusy(busy){
@@ -462,27 +481,80 @@ async function openImport(){
     if(seq!==importsState.seq||!$('importDialog').open)return;
     importsState.companies=data.companies||{};showCurrentImport();
   }catch(e){if(seq===importsState.seq)$('importMessage').textContent=e.message;}
+  if(seq===importsState.seq&&$('importDialog').open){
+    const saved=savedImportJob();
+    if(saved&&[...$('importCompany').options].some(o=>o.value===saved.company)){
+      $('importCompany').value=saved.company;showCurrentImport();importsState.jobId=saved.job_id;
+      await monitorImportJob(saved.job_id,seq);
+    }
+  }
 }
 function closeImport(){resetImportPreview();$('importDialog').close();}
+function renderImportPreview(data){
+  if(data.origin!==importsState.route.origin||data.destination!==importsState.route.destination||data.company!==$('importCompany').value)throw Error('Результат относится к другому маршруту или компании. Откройте нужное направление.');
+  importsState.token=data.token;
+  $('importMessage').textContent=`Распознано ${data.rows.length} из ${state.options.profiles.length} строк. Цены ещё не применены.`;
+  const m=data.meta;
+  $('importEvidence').textContent=`${data.company} · ${data.origin} → ${data.destination}. ${m.parser}. Дата в документе: ${m.document_date||'не распознана'}. ${m.source_page?'Страница '+m.source_page+'. ':''}${m.source_row?'Строка '+m.source_row+'. ':''}${m.archive_member?'Файл в архиве: '+m.archive_member+'. ':''}${m.calculation_basis||''}`;
+  $('importWarnings').innerHTML=(data.warnings||[]).map(x=>`<li>${escapeHtml(x)}</li>`).join('');
+  $('importRows').innerHTML=data.rows.map(r=>`<tr><td>${escapeHtml(r.profile.label)}</td><td>${r.profile.is_minimum_profile?'—':escapeHtml(r.profile.weight_kg)+' кг'}</td><td>${escapeHtml(fmt(r.price))}</td><td>${r.rate_per_kg?escapeHtml(fmt(r.rate_per_kg,'₽/кг')):'сумма отправки; ставка не указана'}${r.minimum?' · минимум '+escapeHtml(fmt(r.minimum)):''}</td></tr>`).join('');
+  $('importMissing').textContent=data.missing_profiles.length?'Не распознаны: '+data.missing_profiles.join(', '):'Все весовые строки распознаны.';
+  $('importPreview').hidden=false;
+}
+function transientImportError(error){return !error.status||[408,425,429,500,502,503,504].includes(error.status);}
+async function monitorImportJob(jobId,seq,initial=null,recoverUpload=false){
+  importBusy(true);let job=initial,failures=0;const began=Date.now();
+  try{
+    while(seq===importsState.seq&&$('importDialog').open){
+      if(!job){
+        try{job=await getJSON('/api/import/jobs/'+encodeURIComponent(jobId),{timeout:12000});failures=0;recoverUpload=false;}
+        catch(error){
+          if(seq!==importsState.seq||!$('importDialog').open)return;
+          if(!transientImportError(error)&&!(recoverUpload&&error.status===404)){
+            forgetImportJob(jobId);importsState.jobId=null;throw error;
+          }
+          if(++failures>6)throw Error('Не удалось восстановить связь с сервером. Если файл был принят, распознавание продолжится. Откройте это окно снова — приложение проверит готовность без повторной загрузки.');
+          if(seq!==importsState.seq||!$('importDialog').open)return;
+          $('importMessage').textContent=`Связь с сервером прервана${error.status?' (HTTP '+error.status+')':''}. Восстанавливаю соединение… Файл повторно не отправляется.`;
+          await new Promise(resolve=>setTimeout(resolve,Math.min(1000*failures,5000)));continue;
+        }
+      }
+      if(seq!==importsState.seq||!$('importDialog').open)return;
+      if(job.status==='ready'){renderImportPreview(job.preview);return;}
+      if(['error','interrupted','expired','committed'].includes(job.status)){
+        forgetImportJob(jobId);importsState.jobId=null;$('importMessage').textContent=job.message||'Распознавание остановлено. Загрузите документ снова.';return;
+      }
+      if(!['queued','parsing'].includes(job.status))throw Error('Сервер вернул неизвестный статус. Откройте окно загрузки снова.');
+      $('importMessage').textContent=(job.message||'Распознаю документ…')+' Можно закрыть окно — обработка продолжится. При повторном открытии появится результат.';
+      if(Date.now()-began>900000)throw Error('Обработка продолжается дольше обычного. Откройте окно снова, чтобы проверить результат.');
+      job=null;await new Promise(resolve=>setTimeout(resolve,1200));
+    }
+  }catch(error){if(seq===importsState.seq)$('importMessage').textContent=error.message;}
+  finally{if(seq===importsState.seq)importBusy(false);}
+}
 async function previewImport(){
+  if(importsState.busy)return;
+  if(importsState.jobId&&!importsState.token){
+    await monitorImportJob(importsState.jobId,++importsState.seq);return;
+  }
   const file=$('importFile').files[0];resetImportPreview();
   if(!file){$('importMessage').textContent='Выберите документ на компьютере.';return;}
   if(file.size>20*1024*1024){$('importMessage').textContent='Файл превышает 20 МБ.';return;}
   const seq=importsState.seq;const form=new FormData();
   Object.entries({...importsState.route,company:$('importCompany').value}).forEach(([k,v])=>form.append(k,v));form.append('file',file);
-  importBusy(true);$('importMessage').textContent='Читаю таблицы и проверяю направление… Для скана ДЛ OCR может занять несколько минут; дождитесь предпросмотра.';
+  const jobId=Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
+  form.append('job_id',jobId);importsState.jobId=jobId;
+  rememberImportJob({job_id:jobId,...importsState.route,company:$('importCompany').value,filename:file.name});
+  importBusy(true);$('importMessage').textContent='Передаю файл серверу… Распознавание будет выполняться в фоне.';
   try{
-    const data=await getJSON('/api/import/preview',{method:'POST',body:form,timeout:630000});
+    const job=await getJSON('/api/import/jobs',{method:'POST',body:form,timeout:30000});
     if(seq!==importsState.seq||!$('importDialog').open)return;
-    importsState.token=data.token;
-    $('importMessage').textContent=`Распознано ${data.rows.length} из ${state.options.profiles.length} строк. Цены ещё не применены.`;
-    const m=data.meta;
-    $('importEvidence').textContent=`${data.company} · ${data.origin} → ${data.destination}. ${m.parser}. Дата в документе: ${m.document_date||'не распознана'}. ${m.source_page?'Страница '+m.source_page+'. ':''}${m.source_row?'Строка '+m.source_row+'. ':''}${m.archive_member?'Файл в архиве: '+m.archive_member+'. ':''}${m.calculation_basis||''}`;
-    $('importWarnings').innerHTML=(data.warnings||[]).map(x=>`<li>${escapeHtml(x)}</li>`).join('');
-    $('importRows').innerHTML=data.rows.map(r=>`<tr><td>${escapeHtml(r.profile.label)}</td><td>${r.profile.is_minimum_profile?'—':escapeHtml(r.profile.weight_kg)+' кг'}</td><td>${escapeHtml(fmt(r.price))}</td><td>${r.rate_per_kg?escapeHtml(fmt(r.rate_per_kg,'₽/кг')):'сумма отправки; ставка не указана'}${r.minimum?' · минимум '+escapeHtml(fmt(r.minimum)):''}</td></tr>`).join('');
-    $('importMissing').textContent=data.missing_profiles.length?'Не распознаны: '+data.missing_profiles.join(', '):'Все весовые строки распознаны.';
-    $('importPreview').hidden=false;
-  }catch(e){if(seq===importsState.seq)$('importMessage').textContent=e.message;}
+    await monitorImportJob(jobId,seq,job);
+  }catch(e){
+    if(seq!==importsState.seq||!$('importDialog').open)return;
+    if(transientImportError(e))await monitorImportJob(jobId,seq,null,true);
+    else{forgetImportJob(jobId);importsState.jobId=null;$('importMessage').textContent=e.message;}
+  }
   finally{if(seq===importsState.seq)importBusy(false);}
 }
 async function applyImport(){
@@ -490,6 +562,7 @@ async function applyImport(){
   importBusy(true);
   try{
     const data=await getJSON('/api/import/commit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:importsState.token})});
+    forgetImportJob(importsState.jobId);importsState.jobId=null;
     importsState.token=null;importsState.companies[data.company]=data.meta;showCurrentImport();
     $('importMessage').textContent=`Применено ${data.rows} строк. Источник: файл пользователя.`;
     state.calculationCompanies.add(data.company);

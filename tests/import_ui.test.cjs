@@ -22,9 +22,9 @@ async function until(fn){for(let i=0;i<250;i++){if(fn())return;await pause(5)}th
   else if(u.pathname==='/api/profile-matrix')data={profiles:[{profile:profiles[0],items:[item()]}]};
   else if(u.pathname==='/api/active-collect')data={status:'idle'};
   else if(u.pathname==='/api/imports')data={companies:{}};
-  else if(u.pathname==='/api/import/preview'){
+  else if(u.pathname==='/api/import/jobs'){
    previewCount++;assert.equal(request.body.get('company'),'Werner');assert.equal(request.body.get('origin'),'Казань');assert.equal(request.body.get('destination'),'Екатеринбург');
-   data={token:'token',company:'Werner',origin:'Казань',destination:'Екатеринбург',rows:[{profile:profiles[0],price:1234}],missing_profiles:[],warnings:['Актуальность проверьте по оригиналу'],meta:{parser:'Тестовая таблица'}};
+   data={token:'token',company:'Werner',origin:'Казань',destination:'Екатеринбург',rows:[{profile:profiles[0],price:1234}],missing_profiles:[],warnings:['Актуальность проверьте по оригиналу'],meta:{parser:'Тестовая таблица'}};data={job_id:'job',status:'ready',preview:data};
   }else if(u.pathname==='/api/import/commit'){commitCount++;assert.equal(JSON.parse(request.body).token,'token');applied=true;data={company:'Werner',origin:'Казань',destination:'Екатеринбург',rows:1,meta:{original_filename:'Прайс.xlsx',uploaded_at:'now'}}}
   else if(u.pathname==='/api/import'&&request.method==='DELETE'){applied=false;data={ok:true}}
   else throw Error('Unexpected '+url);

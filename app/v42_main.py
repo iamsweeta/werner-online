@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="54.0"
+VERSION="55.0"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
@@ -111,6 +111,24 @@ def import_preview(company:str=Form(...),origin:str=Form(...),destination:str=Fo
     except Exception as exc:
         raise HTTPException(400,str(exc)[:700]) from exc
     finally:file.file.close()
+
+
+@app.post('/api/import/jobs',status_code=202)
+def import_job_start(company:str=Form(...),origin:str=Form(...),destination:str=Form(...),file:UploadFile=File(...),job_id:str|None=Form(None)):
+    from .route_import_jobs import start
+    from .tariff_documents import MAX_BYTES
+    origin,destination=_validate_route(origin,destination)
+    try:return start(file.file.read(MAX_BYTES+1),file.filename or '',company,origin,destination,job_id)
+    except ValueError as exc:raise HTTPException(400,str(exc)) from exc
+    finally:file.file.close()
+
+
+@app.get('/api/import/jobs/{job_id}')
+def import_job_status(job_id:str):
+    from .route_import_jobs import status
+    try:return status(job_id)
+    except ValueError as exc:raise HTTPException(400,str(exc)) from exc
+    except FileNotFoundError as exc:raise HTTPException(404,str(exc)) from exc
 
 
 class ImportCommit(BaseModel):
@@ -464,7 +482,7 @@ def diagnostics(origin:str="Санкт-Петербург",destination:str="Мо
 def diagnostics_download(origin:str='Санкт-Петербург',destination:str='Москва',profile:str='w100'):
     report=diagnostics(origin,destination,profile)
     return Response(json.dumps(report,ensure_ascii=False,indent=2).encode('utf-8'),media_type='application/json',
-                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_54_0.json"'})
+                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_55_0.json"'})
 
 
 @app.get("/api/settings")
