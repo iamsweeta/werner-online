@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel,StrictStr,StrictInt,StrictFloat
 
 from .v42_engine import (
     BASE_DIR, RUNTIME_DIR, COMPANIES, COMPANY_LABELS, COMMON_PROFILES, PROFILE_BY_ID,
@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="58.0"
+VERSION="59.0"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
@@ -231,7 +231,7 @@ def _run_collect(key:str,selected:list[str],origin:str,destination:str):
             job["message"]="Онлайн-проверка завершена. Успешные ответы сохранены, при сбоях оставлен последний подтверждённый прайс. " + " | ".join(x.get("message","") for x in failed)
         else:job["message"]="Онлайн-проверка завершена: доступные live-источники обновлены."
         job["status"]="paused" if job.get("stop_requested") else "done"; job["finished_at"]=_now()
-        if job.get("stop_requested"):job["message"]="Загрузка остановлена. Полученные цены сохранены; остальные компании не запрашивались."
+        if job.get("stop_requested"):job["message"]="Загрузка остановлена. Полученные цены сохранены."
     except Exception as exc:
         job.update({"status":"error","finished_at":_now(),"message":f"Ошибка обновления: {type(exc).__name__}: {exc}"})
 
@@ -291,16 +291,13 @@ def stop_collect(body:CollectRequest):
         job=COLLECT_JOBS.get(_route_key(origin,destination))
         if not job:raise HTTPException(404,'Обновление не найдено')
         if job.get('status') in {'queued','running'}:
-            job['stop_requested']=True
-            job['message']='Останавливаю новые запросы. Уже отправленные ответы будут сохранены.'
+            job['stop_requested']=True;job['message']='Останавливаю новые компании. Текущие проверки будут сохранены.'
         return json.loads(json.dumps(job))
 
 @app.get('/api/bulk/history')
 def bulk_history():
-    with BULK.db() as db:
-        rows=db.execute("SELECT id,status,created_at,config FROM jobs ORDER BY created_at DESC,rowid DESC LIMIT 20").fetchall()
-    return {'jobs':[{'job_id':r['id'],'status':r['status'],'created_at':r['created_at'],
-                     'scope':json.loads(r['config'])['scope'],'mode':json.loads(r['config']).get('mode','online')} for r in rows]}
+    with BULK.db() as db:rows=db.execute('SELECT id,status,created_at,config FROM jobs ORDER BY created_at DESC,rowid DESC LIMIT 20').fetchall()
+    return {'jobs':[{'job_id':r['id'],'status':r['status'],'created_at':r['created_at'],'scope':json.loads(r['config'])['scope'],'mode':json.loads(r['config']).get('mode','online')} for r in rows]}
 
 @app.get("/api/collect-status")
 def collect_status(origin:str,destination:str):
@@ -501,7 +498,7 @@ def diagnostics(origin:str="Санкт-Петербург",destination:str="Мо
 def diagnostics_download(origin:str='Санкт-Петербург',destination:str='Москва',profile:str='w100'):
     report=diagnostics(origin,destination,profile)
     return Response(json.dumps(report,ensure_ascii=False,indent=2).encode('utf-8'),media_type='application/json',
-                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_55_0.json"'})
+                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_59_0.json"'})
 
 
 @app.get("/api/settings")
@@ -547,7 +544,7 @@ def export_excel(origin:str,destination:str,profile:str="w100",companies:str|Non
     audit.append(['Компания','Диапазон','Источник данных','Получено / импортировано','Официальный URL','Расчёт','Ошибка онлайн-обновления','Имя файла пользователя','Дата в документе','SHA256','Страница / строка','Условия НДС'])
     for row in rows:
         for item in row['items']:
-            audit.append([item['company_label'],row['profile']['range_weight'],'Файл пользователя' if item.get('uploaded') else 'LIVE' if item.get('online') else 'LAST GOOD' if item.get('price') is not None else 'Нет данных',
+            audit.append([item['company_label'],row['profile']['range_weight'],'Введено вручную' if item.get('manual') else 'Файл пользователя' if item.get('uploaded') else 'LIVE' if item.get('online') else 'LAST GOOD' if item.get('price') is not None else 'Нет данных',
                           item.get('captured_at'),item.get('source_url'),item.get('calculation_basis'),item.get('refresh_error'),item.get('original_filename'),item.get('document_date'),item.get('sha256'),str(item.get('source_page') or item.get('source_row') or ''),item.get('tax_basis') or 'Не определены; см. оригинал'])
     audit.freeze_panes='A2'
     # User-provided file names and remote error strings are text, never Excel formulas.
@@ -601,3 +598,22 @@ def export_route(origin:str,destination:str,companies:str|None=None,view:str='to
     """Independent file containing only this route; never the customer book."""
     return export_excel(origin,destination,companies=companies,view=view,live_only=live_only,
                         include_imports=include_imports,layout='route',all_loaded=False)
+
+
+class ManualPriceRequest(BaseModel):
+    company:str
+    origin:str
+    destination:str
+    profile:str
+    value:StrictStr|StrictFloat|StrictInt|None=None
+    unit:str='rub'
+
+@app.post('/api/manual-price')
+def manual_price_put(body:ManualPriceRequest):
+    from .manual_prices import put
+    return _bulk_call(put,body.company,body.origin,body.destination,body.profile,body.value,body.unit)
+
+@app.delete('/api/manual-price')
+def manual_price_remove(body:ManualPriceRequest):
+    from .manual_prices import remove
+    return _bulk_call(remove,body.company,body.origin,body.destination,body.profile)

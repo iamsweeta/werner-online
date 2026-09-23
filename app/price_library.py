@@ -1,5 +1,6 @@
 """Confirmed multi-route price documents. SQLite commits all routes atomically."""
 from __future__ import annotations
+from .business_time import tariff_today
 import hashlib,json,re,sqlite3,threading,time,uuid,io,zipfile
 from contextlib import contextmanager
 from datetime import date
@@ -147,7 +148,15 @@ def select_document(company,origin,destination,document_id=None):
             conn.execute('DELETE FROM excluded WHERE company=? AND origin=? AND destination=?',(company,origin,destination))
         from .document_imports import bump_revision
         bump_revision()
-    return {'ok':True,'company':company,'origin':origin,'destination':destination,'document_id':document_id}
+        count=0;filename=None;cleared=0
+        if document_id:
+            with db() as conn:
+                profiles=[r[0] for r in conn.execute('SELECT profile FROM prices WHERE file=? AND origin=? AND destination=?',(document_id,origin,destination))]
+                metadata=conn.execute('SELECT meta FROM files WHERE id=?',(document_id,)).fetchone()
+            filename=json.loads(metadata['meta']).get('original_filename');count=len(profiles)
+            from .manual_prices import clear_covered
+            cleared=clear_covered(company,origin,destination,profiles)
+        return {'ok':True,'company':company,'origin':origin,'destination':destination,'document_id':document_id,'filename':filename,'applied_prices':count,'replaced_manual':cleared,'applied_at':e._now()}
 
 
 def disable_route(company,origin,destination):
@@ -291,7 +300,7 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
     try:t.validate_file(raw,filename)
     except Exception as exc:raise ValueError('Не удалось прочитать документ: '+str(exc)[:500]) from exc
     if document_date:
-        if date.fromisoformat(document_date)>date.today():raise ValueError('Дата тарифов ещё не наступила')
+        if date.fromisoformat(document_date)>tariff_today():raise ValueError('Дата тарифов ещё не наступила')
     token=uuid.uuid4().hex;name=t.normalize_filename(filename)
     pending=root()/'multi_pending';pending.mkdir(parents=True,exist_ok=True)
     with LOCK:
@@ -321,25 +330,25 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
             for (o,d),item in parsed.items():
                 stamp=item['meta'].get('document_date') or document_date
                 if stamp:
-                    if date.fromisoformat(stamp)>date.today():raise ValueError('В документе указана будущая дата тарифов')
+                    if date.fromisoformat(stamp)>tariff_today():raise ValueError('В документе указана будущая дата тарифов')
                     dates.add(stamp)
                 for value in item['values'].values():
                     if not value.get('document_date'):value['document_date']=stamp
                     if value.get('document_date'):
-                        if date.fromisoformat(value['document_date'])>date.today():raise ValueError('В документе указана будущая дата тарифов')
+                        if date.fromisoformat(value['document_date'])>tariff_today():raise ValueError('В документе указана будущая дата тарифов')
                         dates.add(value['document_date'])
                 item['meta']['document_date']=stamp
                 routes.append({'origin':o,'destination':d,**item})
             for conflict in conflicts:
                 for value in conflict['options']:
                     if not value.get('document_date'):value['document_date']=document_date
-                    if value.get('document_date') and date.fromisoformat(value['document_date'])>date.today():raise ValueError('В документе указана будущая дата тарифов')
+                    if value.get('document_date') and date.fromisoformat(value['document_date'])>tariff_today():raise ValueError('В документе указана будущая дата тарифов')
             if conflicts:warnings.append('В файлах есть разные цены для одного маршрута и веса. Выберите нужную версию каждой цены ниже.')
             has_ocr=any(r['meta'].get('ocr') for r in routes)
             if has_ocr:warnings.insert(0,scan_ocr.WARNING)
             warnings.append('Загрузка заменит ранее сохранённый прайс этой компании для распознанных маршрутов. Части одного прайса загружайте вместе.')
             if not dates:warnings.append('Дата тарифов не определена. Проверьте актуальность документа.')
-            if any((date.today()-date.fromisoformat(s)).days>30 for s in dates):warnings.append('В документе есть тарифы старше 30 дней. Проверьте, что они ещё действуют.')
+            if any((tariff_today()-date.fromisoformat(s)).days>30 for s in dates):warnings.append('В документе есть тарифы старше 30 дней. Проверьте, что они ещё действуют.')
             warnings.append('После подтверждения документ станет выбранным источником его направлений в «Одном маршруте» и большой таблице. Вернуть онлайн-приоритет можно выбором «Автоматически».')
             metadata={'token':token,'company':company,'original_filename':name,'extension':Path(name).suffix.lower(),
                       'sha256':hashlib.sha256(raw).hexdigest(),'created_at':e._now(),'document_date':next(iter(dates)) if len(dates)==1 else None,
@@ -405,6 +414,8 @@ def commit(token,resolutions=None):
                 conn.execute('INSERT OR REPLACE INTO route_documents VALUES (?,?,?,?)',(meta['company'],o,d,ident))
                 for pid,value in route['values'].items():
                     conn.execute('INSERT INTO prices VALUES (?,?,?,?,?)',(ident,o,d,pid,json.dumps({**route['meta'],**value},ensure_ascii=False)))
+        from .manual_prices import clear_covered
+        for route in data['routes']:clear_covered(meta['company'],route['origin'],route['destination'],route['values'])
         path.unlink();source.unlink()
         from .document_imports import bump_revision
         bump_revision()

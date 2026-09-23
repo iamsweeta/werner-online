@@ -1,2 +1,2 @@
 @echo off
-call "%~dp0START_WINDOWS_V58_0.cmd"
+call "%~dp0START_WINDOWS_V59_0.cmd"

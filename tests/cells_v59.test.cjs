@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
+const root=path.resolve(__dirname,'..'),dom=new JSDOM(fs.readFileSync(path.join(root,'static/index.html'),'utf8'),{url:'http://localhost:8423',runScripts:'outside-only'}),w=dom.window,$=id=>w.document.getElementById(id);
+w.eval(fs.readFileSync(path.join(root,'static/app.js'),'utf8').replace('init().catch(e=>toast(e.message));','')+'\nwindow.s=state;');
+const s=w.s,profiles=[1,50,100,1000,1500,5000,10000,20000].map(n=>({id:'w'+n,weight_kg:n,range_weight:n+' кг',label:n+' кг'}));
+s.options={profiles,companies:[{id:'ДЛ',label:'ДЛ'}]};s.calculationCompanies.add('ДЛ');
+$('originSelect').innerHTML='<option>Москва</option>';$('destinationSelect').innerHTML='<option>Санкт-Петербург</option>';
+const data={profiles:profiles.map(p=>({profile:p,items:[{company:'ДЛ',status:'ok',price:p.weight_kg*15,comparison_value:p.weight_kg*15,published_rate_per_kg:p.weight_kg>=100?15:null,uploaded:true}]}))};
+s.matrix=data;w.renderMatrix(data);w.renderTariffGraph(data);
+assert.equal(s.graphScope,'custom');assert.equal($('heavyRangeControls').hidden,false);assert.deepEqual(Array.from(w.weightWindow()),[0,20000]);assert.equal($('rateChart').querySelectorAll('circle').length,8);
+$('unitModeSelect').value='per_kg';$('unitModeSelect').dispatchEvent(new w.Event('change'));assert.doesNotMatch($('rateChart').textContent,/₽\/кг/);
+$('heavyRangeFrom').value='10';$('heavyRangeFrom').dispatchEvent(new w.Event('input'));$('heavyRangeTo').value='22';$('heavyRangeTo').dispatchEvent(new w.Event('input'));
+assert.deepEqual(Array.from(w.weightWindow()),[100,1500]);assert.equal($('rateChart').querySelectorAll('circle').length,3);
+$('heavyRangeFrom').value='26';$('heavyRangeFrom').dispatchEvent(new w.Event('input'));assert.deepEqual(Array.from(w.weightWindow()),[5000,5000]);
+const dialog=$('manualPriceDialog');dialog.showModal=()=>dialog.open=true;dialog.close=()=>dialog.open=false;
+$('matrixBody').querySelector('[data-price-profile=w100]').click();assert.ok(dialog.open);assert.equal($('manualPriceValue').value,'15');assert.equal($('manualPriceUnit').value,'rub_per_kg');
+let saved;w.compare=async()=>{};w.getJSON=async(url,options)=>{saved={url,...options,body:JSON.parse(options.body)};return {ok:true};};
+(async()=>{
+ $('manualPriceValue').value='14,50';await w.saveManualPrice();assert.equal(saved.url,'/api/manual-price');assert.equal(saved.method,'POST');assert.equal(saved.body.value,'14,50');assert.equal(saved.body.profile,'w100');assert.equal(saved.body.origin,'Москва');assert.equal(saved.body.unit,'rub_per_kg');assert.equal(dialog.open,false);assert.match($('toast').textContent,/Цена сохранена/);
+ w.openManualPrice('ДЛ','w1');assert.equal($('manualPriceUnit').value,'rub');assert.equal($('manualPriceUnit').querySelector('[value=rub_per_kg]').disabled,true);assert.equal($('manualPriceValue').value,'15');
+ w.getJSON=async()=>{throw Error('Сеть недоступна')};await w.saveManualPrice();assert.equal(dialog.open,true);assert.match($('manualPriceMessage').textContent,/Сеть недоступна/);assert.equal($('manualPriceSave').disabled,false);
+ const item=data.profiles[2].items[0];Object.assign(item,{manual:true,manual_value:22,manual_unit:'rub_per_kg',comparison_value:2200});w.openManualPrice('ДЛ','w100');assert.equal($('manualPriceValue').value,'22');assert.equal($('manualPriceDelete').hidden,false);
+ w.getJSON=async(url,options)=>{saved=options;return{ok:true}};await w.saveManualPrice(true);assert.equal(saved.method,'DELETE');assert.equal(dialog.open,false);
+ dom.window.close();console.log('PASS: default 0–20 t range, narrowing, stable chart units, cell dialog, exact manual request, saved feedback, retained error draft and reset');
+})().catch(e=>{console.error(e);process.exit(1)});

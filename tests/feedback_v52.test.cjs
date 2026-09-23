@@ -7,7 +7,7 @@ const s=w.testState,weights=[1,50,100,1000,1500,2000,5000,10000,20000];
 const profiles=weights.map(weight=>({id:'w'+weight,weight_kg:weight,label:weight+' кг',range_weight:weight+' кг'}));
 s.options={profiles,companies:[{id:'ДЛ',label:'ДЛ'}]};s.calculationCompanies.add('ДЛ');
 const data={profiles:profiles.map(p=>({profile:p,items:[{company:'ДЛ',comparison_value:p.weight_kg*10,price:p.weight_kg*10,status:'ok',online:false,refresh_status:'failed',captured_at:'2020-01-01T00:00:00Z'}]}))};
-assert.deepEqual([...$('graphScopeSelect').options].map(x=>x.value),['small','medium','heavy','custom']);
+assert.deepEqual([...$('graphScopeSelect').options].map(x=>x.value),['custom','small','medium','heavy']);
 for(const [scope,expected] of [['small',[1,50]],['medium',[100,1000,1500]],['heavy',[1500,2000,5000]]]){
  s.graphScope=scope;w.renderTariffGraph(data);
  const titles=[...$('rateChart').querySelectorAll('circle title')].map(x=>x.textContent);

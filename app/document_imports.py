@@ -1,5 +1,6 @@
 """Durable, explicitly confirmed user tariffs, separate from network results."""
 from __future__ import annotations
+from .business_time import tariff_today
 
 import hashlib
 import math
@@ -100,8 +101,8 @@ def preview(raw, filename, company, origin, destination):
     stamp=parsed.get('document_date')
     if stamp:
         d=date.fromisoformat(stamp)
-        if d>date.today():raise ValueError('В документе указана будущая дата тарифов; текущие цены не заменены')
-        if (date.today()-d).days>30:warnings.append('Дата в документе старше 30 дней. Проверьте актуальность у перевозчика.')
+        if d>tariff_today():raise ValueError('В документе указана будущая дата тарифов; текущие цены не заменены')
+        if (tariff_today()-d).days>30:warnings.append('Дата в документе старше 30 дней. Проверьте актуальность у перевозчика.')
     else:warnings.append('Дата действия тарифов в документе не распознана. Проверьте её в оригинале.')
     if len(values)<len(e.COMMON_PROFILES):warnings.append('Часть весов отсутствует в файле. Для них сохранится отдельный онлайн/архивный источник; значения не будут достроены.')
     token=uuid.uuid4().hex
@@ -137,6 +138,8 @@ def commit(token):
         saved={**meta,'import_revision':revision()+1,'source_file':filename,'uploaded_at':e._now(),'captured_at':e._now(),'online':False}
         from .price_library import register_single
         saved=register_single(token,saved,values,o,d)
+        from .manual_prices import clear_covered
+        clear_covered(company,o,d,values)
         bump_revision()
         pending.unlink(missing_ok=True);source.unlink(missing_ok=True)
         return {'ok':True,'company':company,'origin':o,'destination':d,'rows':len(values),'meta':saved}

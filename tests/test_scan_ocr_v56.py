@@ -2,15 +2,14 @@
 import json,tempfile,time,unittest
 from pathlib import Path
 from unittest.mock import patch
-from app import scan_ocr as o,tariff_documents as t
+from app import scan_ocr as o,tariff_documents as t,ocr_cache,v42_engine as e
 from app.scan_ocr_worker import route_bands
 
 class RouteScan(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.raw=(Path(__file__).parent/'fixtures/dellin_scan_two_rows.pdf').read_bytes()
-        from app import v42_engine as e
-        with tempfile.TemporaryDirectory() as cache_dir,patch.object(e,'RUNTIME_DIR',Path(cache_dir)):
+        with tempfile.TemporaryDirectory() as directory,patch.object(e,'RUNTIME_DIR',Path(directory)):
             cls.result=o.prepare(cls.raw,'ДЛ',origin='Санкт-Петербург',destination='Абакан')
     def test_actual_raster_reads_only_selected_row(self):
         r=self.result
@@ -23,7 +22,7 @@ class RouteScan(unittest.TestCase):
     def test_route_cache_never_masks_full_index_or_another_route(self):
         with t.parsing_session():
             cache=t._SESSION.get();cache[('ocr',self.raw,'ДЛ','Санкт-Петербург','Абакан')]=self.result
-            with patch('app.ocr_cache.get',return_value=None),patch.object(o.subprocess,'Popen',side_effect=RuntimeError('worker requested')):
+            with patch.object(ocr_cache,'get',return_value=None),patch.object(o.subprocess,'Popen',side_effect=RuntimeError('worker requested')):
                 self.assertIs(o.prepare(self.raw,'ДЛ','Санкт-Петербург','Абакан'),self.result)
                 with self.assertRaisesRegex(RuntimeError,'worker requested'):o.prepare(self.raw,'ДЛ')
                 with self.assertRaisesRegex(RuntimeError,'worker requested'):o.prepare(self.raw,'ДЛ','Санкт-Петербург','Альметьевск')

@@ -11,7 +11,7 @@ const state = {
   options:null, comparison:null, matrix:null, busy:false, bulkActive:false,
   compareSeq:0, compareController:null, optionsSeq:0, optionsController:null,
   refreshingRoutes:new Set(), refreshedRoutes:new Set(),
-  companiesInitialized:false, refreshLocked:false, calculationCompanies:new Set(), hiddenGraphCompanies:new Set(), graphScope:'small', unitMode:'total', liveOnly:false, includeImports:true
+  companiesInitialized:false, refreshLocked:false, calculationCompanies:new Set(), hiddenGraphCompanies:new Set(), graphScope:'custom', unitMode:'total', liveOnly:false, includeImports:true
 };
 
 function toast(message){ const n=$('toast'); n.textContent=message; n.classList.add('visible'); clearTimeout(window.__toast); window.__toast=setTimeout(()=>n.classList.remove('visible'),3600); }
@@ -51,7 +51,7 @@ function exactViewValue(item, profile){
 }
 function updateUnitLabels(){
   const note=$('unitModeNote');if(note)note.textContent=state.unitMode==='per_kg'?'₽/кг = стоимость отправки ÷ контрольный вес. Это расчётная величина, включая минимальную плату. МИН всегда в ₽.':'Показана стоимость всей отправки на контрольном весе. МИН — минимальная стоимость отправления по компании.';
-  for(const [key,label] of Object.entries({small:'0–50 кг',medium:'100–1500 кг',heavy:'1500–5000 кг'})){const option=$('graphScopeSelect')?.querySelector(`option[value=${key}]`);if(option)option.textContent=label+' · '+(key!=='small'&&state.unitMode==='per_kg'?'расчётная стоимость, ₽/кг':'₽ за отправку');}
+  for(const [key,label] of Object.entries({small:'0–50 кг',medium:'100–1500 кг',heavy:'1500–5000 кг'})){const option=$('graphScopeSelect')?.querySelector(`option[value=${key}]`);if(option)option.textContent=label+' · '+'₽ за отправку';}
   const ps=$('profileSelect'); const profiles=state.options?.profiles||[];
   if(ps && profiles.length){ const selected=ps.value; ps.innerHTML=profiles.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.description)} · ${escapeHtml(p.is_minimum_profile?'Минимум':state.unitMode==='per_kg'?'Расчётная стоимость':'Стоимость отправки')} · ${escapeHtml(activeUnit(p))}</option>`).join(''); if(profiles.some(p=>p.id===selected)) ps.value=selected; }
 }
@@ -88,6 +88,7 @@ function setAllCompanies(on){ state.calculationCompanies.clear(); if(on)(state.o
 
 function visiblePrice(item){return !state.liveOnly || item?.online || (state.includeImports && item?.uploaded);}
 function statusLabel(item){
+  if(item?.manual)return 'Введено вручную';
   if(item?.uploaded)return item.document_selected?'Выбранный файл':'Файл пользователя';
   if(item?.online) return item?.price_is_minimum?'Обновлено · цена «от»':'Обновлено · LIVE';
   if(item?.refresh_status==='unavailable' && item?.status!=='ok') return 'Прайс маршрута не опубликован';
@@ -114,7 +115,7 @@ function syncRetryButtons(){
 function sourceBlock(item){
   const url=item?.source_url; const note=truncate(item?.message||item?.formula||'',180);
   const hasData=numeric(item?.comparison_value)||(item?.price_is_minimum&&numeric(item?.price));
-  const mode=item?.uploaded?'ФАЙЛ ПОЛЬЗОВАТЕЛЯ':item?.online?'LIVE':(hasData?'СОХРАНЁННАЯ ЦЕНА':(item?.refresh_status==='failed'?'ОШИБКА ЗАГРУЗКИ':'НЕ ЗАГРУЖЕНО'));
+  const mode=item?.manual?'ВВЕДЕНО ВРУЧНУЮ':item?.uploaded?'ФАЙЛ ПОЛЬЗОВАТЕЛЯ':item?.online?'LIVE':(hasData?'СОХРАНЁННАЯ ЦЕНА':(item?.refresh_status==='failed'?'ОШИБКА ЗАГРУЗКИ':'НЕ ЗАГРУЖЕНО'));
   const file=item?.source_file?`<a href="${item.uploaded?'/api/import-file/':'/api/source-file/'}${encodeURIComponent(item.source_file)}" target="_blank" rel="noopener">${item.uploaded?escapeHtml(item.original_filename||'Загруженный документ'):'Скачанный прайс'}</a>`:'';
   const taxes=item?.tax_basis?`<span>${escapeHtml(item.tax_basis)}</span>`:'';
   const basis=item?.calculation_basis?`<span>${escapeHtml(item.calculation_basis)}</span>`:'';
@@ -132,36 +133,21 @@ function graphSegments(points){
   if(current.length) segments.push(current);
   return segments;
 }
-const HEAVY_WEIGHTS=[100,200,250,300,400,500,600,700,750,800,1000,1200,1500,2000,2500,3000,5000,10000,20000];
-function heavyWindow(){
-  const from=Number($('heavyRangeFrom').value),to=Number($('heavyRangeTo').value);
-  const pair=[HEAVY_WEIGHTS[from],HEAVY_WEIGHTS[to]];
-  $('heavyRangeLabel').textContent=pair.map(w=>w.toLocaleString('ru-RU')).join('–')+' кг';
-  $('heavyRangeFrom').setAttribute('aria-valuetext',pair[0]+' кг');
-  $('heavyRangeTo').setAttribute('aria-valuetext',pair[1]+' кг');
-  return pair;
-}
-['heavyRangeFrom','heavyRangeTo'].forEach(id=>$(id)?.addEventListener('input',()=>{
-  if(Number($('heavyRangeFrom').value)>Number($('heavyRangeTo').value))$(id==='heavyRangeFrom'?'heavyRangeTo':'heavyRangeFrom').value=$(id).value;
-  heavyWindow();if(state.matrix)renderTariffGraph(state.matrix);
-}));
 function renderTariffGraph(data){
   const host=$('rateChart');
   const legend=$('graphLegend');
   if(!host || !legend) return;
-  const scope=state.graphScope||'small';
-  const graphUnit=scope==='small'?'₽':activeUnit({});
-  $('graphExplainer').textContent=scope==='small'?'0–50 кг: стоимость за всю отправку в рублях.':'100 кг–20 т: масштаб меняется по выбранным границам. Единица — '+graphUnit+'.';
-  if($('heavyRangeControls'))$('heavyRangeControls').hidden=scope!=='custom';
+  const scope=state.graphScope||'custom';
+  $('heavyRangeControls').hidden=scope!=='custom';
   let rows=(data?.profiles||[]).filter(r=>!r.profile?.is_minimum_profile);
-  const [minWeight,maxWeight]=scope==='custom'?heavyWindow():(({small:[0,50],medium:[100,1500],heavy:[1500,5000]})[scope]||[0,50]);
+  const [minWeight,maxWeight]=scope==='custom'?weightWindow():(({small:[0,50],medium:[100,1500],heavy:[1500,5000]})[scope]||[0,20000]);
   rows=rows.filter(r=>Number(r.profile?.weight_kg)>0&&Number(r.profile.weight_kg)>=minWeight&&Number(r.profile.weight_kg)<=maxWeight);
   const companies=(state.options?.companies||[]).filter(c=>state.calculationCompanies.has(c.id));
   if(!rows.length || !companies.length){ host.innerHTML='<div class="empty">Нет данных для выбранного масштаба графика.</div>'; legend.innerHTML=''; return; }
   const series=companies.map((company,idx)=>{
     const values=rows.map(row=>{
       const item=(row.items||[]).find(x=>x.company===company.id);
-      const v=item && !item.price_is_minimum && visiblePrice(item) ? (scope==='small'?item.comparison_value:exactViewValue(item,row.profile)) : null;
+      const v=item && !item.price_is_minimum && visiblePrice(item) ? item.comparison_value : null;
       return numeric(v) ? Number(v) : null;
     });
     return {company,...company,color:graphColor(idx),values,count:values.filter(numeric).length};
@@ -192,15 +178,16 @@ function renderTariffGraph(data){
   visible.forEach(s=>{
     const points=s.values.map((v,i)=>numeric(v)?{x:x(i),y:y(v),v:Number(v),label:rows[i].profile?.range_weight}:null);
     graphSegments(points).forEach(seg=>{ if(seg.length>=2){ const d=seg.map((p,i)=>`${i?'L':'M'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '); paths.push(`<path d="${d}" class="graph-series-line" style="--series-color:${s.color}"/>`); } });
-    points.filter(Boolean).forEach(p=>paths.push(`<circle cx="${p.x}" cy="${p.y}" r="4" class="graph-series-point" style="--series-color:${s.color}"><title>${escapeHtml(s.label)} · ${escapeHtml(p.label)} · ${escapeHtml(fmt(p.v,graphUnit))}</title></circle>`));
+    points.filter(Boolean).forEach(p=>paths.push(`<circle cx="${p.x}" cy="${p.y}" r="4" class="graph-series-point" style="--series-color:${s.color}"><title>${escapeHtml(s.label)} · ${escapeHtml(p.label)} · ${escapeHtml(fmt(p.v,'₽'))}</title></circle>`));
   });
-
+  const graphUnit='₽';
   const scopeText=`${minWeight}–${maxWeight} кг · ${graphUnit}`;
   host.innerHTML=`<div class="graph-scroll"><svg class="tariff-graph" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="График тарифов компаний по весовым диапазонам"><text x="18" y="${m.top+plotH/2}" transform="rotate(-90 18 ${m.top+plotH/2})" class="graph-axis-title">${graphUnit}</text>${marker}${grid.join('')}<line x1="${m.left}" x2="${width-m.right}" y1="${m.top+plotH}" y2="${m.top+plotH}" class="graph-axis"/>${paths.join('')}${xLabels}</svg></div><div class="graph-note">Масштаб: ${scopeText}. Минимум по видимым точкам ${fmt(rawMin,graphUnit)}, максимум ${fmt(rawMax,graphUnit)}. Строка «МИН» и цены «от» не строятся. Текстовая пометка означает отсутствие сопоставимой числовой ставки, а не ноль.</div>`;
 }
 function renderComparison(data){
   state.comparison=data;
-  $('updatedAt').textContent=`Расчёт: ${new Date(data.calculated_at).toLocaleString('ru-RU')}`;
+  const savedTimes=(data.items||[]).map(i=>i.captured_at).filter(t=>t&&Number.isFinite(Date.parse(t))).sort((a,b)=>Date.parse(b)-Date.parse(a));
+  $('updatedAt').textContent=savedTimes.length?'Последние данные: '+new Date(savedTimes[0]).toLocaleString('ru-RU')+' · сохранены без срока удаления':'Сохранённых цен пока нет';
   const selectedProfile=(state.options?.profiles||[]).find(p=>p.id===data.profile_id)||{}; const unit=activeUnit(selectedProfile); $('summaryTitle').textContent=`${data.range_weight} · ${selectedProfile.tariff_type||'Тариф'} · ${unit}`;
   $('summaryRoute').textContent=`${data.origin} → ${data.destination}`;
   const items=data.items||[];
@@ -230,7 +217,7 @@ function renderComparison(data){
       lowerNote=`<div class="lower-note">от ${fmtMoney(item.price)}${activeUnit(selectedProfile)==='₽/кг'?' · цена «от» не переводится в ₽/кг без точной весовой строки':''}</div>`;
     }
     if(!hiddenByFreshness&&!numeric(exactValue)&&numeric(item.comparison_value)&&activeUnit(selectedProfile)==='₽/кг'){value='нет ставки';lowerNote=`<div class="lower-note">Источник даёт сумму отправки: ${fmtMoney(item.comparison_value)}. Добавьте прайс со ставкой за кг.</div>`;}
-    return `<tr><td class="company-cell"><strong>${escapeHtml(item.company_label)}</strong></td><td class="value-cell">${value}${lowerNote}</td><td><span class="status-pill">${escapeHtml(hiddenByFreshness?(item.uploaded?'Файл скрыт фильтром':(numeric(item.price)||numeric(item.comparison_value))?'LAST GOOD скрыт':'нет LIVE'):statusLabel(item))}</span></td><td>${sourceBlock(item)}${['failed','partial'].includes(item.refresh_status)?`<button type="button" class="text-button" data-retry-company="${escapeHtml(item.company)}" ${state.refreshLocked?'disabled':''}>Повторить загрузку</button>`:''}</td></tr>`;
+    return `<tr><td class="company-cell"><strong>${escapeHtml(item.company_label)}</strong></td><td class="value-cell"><button type="button" class="cell-price" data-edit-price="${escapeHtml(item.company)}" data-price-profile="${escapeHtml(selectedProfile.id)}" aria-label="Изменить цену: ${escapeHtml(item.company_label)}">${value}<span aria-hidden="true" class="edit-mark">✎</span></button>${lowerNote}</td><td><span class="status-pill">${escapeHtml(hiddenByFreshness?(item.uploaded?'Файл скрыт фильтром':(numeric(item.price)||numeric(item.comparison_value))?'LAST GOOD скрыт':'нет LIVE'):statusLabel(item))}</span></td><td>${sourceBlock(item)}${['failed','partial'].includes(item.refresh_status)?`<button type="button" class="text-button" data-retry-company="${escapeHtml(item.company)}" ${state.refreshLocked?'disabled':''}>Повторить загрузку</button>`:''}</td></tr>`;
   }).join('')||'<tr><td colspan="4" class="empty">Нет данных.</td></tr>';
   $('comparisonTable').querySelectorAll('[data-retry-company]').forEach(btn=>btn.addEventListener('click',()=>refreshRouteSources(true,[btn.dataset.retryCompany])));
   syncRetryButtons();
@@ -243,7 +230,7 @@ function renderMatrix(data){
   $('matrixBody').innerHTML=(data.profiles||[]).map(row=>{
     const by=Object.fromEntries((row.items||[]).map(x=>[x.company,x]));
     const rowUnit=activeUnit(row.profile);
-    const cells=companies.map(c=>{ const item=by[c.id]||{}; const hiddenByFreshness=!visiblePrice(item); let text=item.availability==='on_request'?'по запросу':hiddenByFreshness?(numeric(item.price)?'—':'нет данных'):(item.display_text||'нет данных'); let cls='empty-cell'; const v=hiddenByFreshness?null:exactViewValue(item,row.profile); if(numeric(v)){ text=fmt(v,rowUnit); cls='value-matrix'; } else if(!hiddenByFreshness&&item.price_is_minimum&&numeric(item.price)){ text=rowUnit==='₽/кг'?'— (от '+fmtMoney(item.price)+')':`от ${fmtMoney(item.price)}`; cls='lower-cell'; } if(!hiddenByFreshness&&!numeric(v)&&numeric(item.comparison_value)&&rowUnit==='₽/кг')text='нет ставки'; return `<td class="${cls}" title="${escapeHtml([statusLabel(item),item.captured_at?new Date(item.captured_at).toLocaleString('ru-RU'):'',cleanText(item.message||'')].filter(Boolean).join(' · '))}">${escapeHtml(text)}</td>`; }).join('');
+    const cells=companies.map(c=>{ const item=by[c.id]||{}; const hiddenByFreshness=!visiblePrice(item); let text=item.availability==='on_request'?'по запросу':hiddenByFreshness?(numeric(item.price)?'—':'нет данных'):(item.display_text||'нет данных'); let cls='empty-cell'; const v=hiddenByFreshness?null:exactViewValue(item,row.profile); if(numeric(v)){ text=fmt(v,rowUnit); cls='value-matrix'; } else if(!hiddenByFreshness&&item.price_is_minimum&&numeric(item.price)){ text=rowUnit==='₽/кг'?'— (от '+fmtMoney(item.price)+')':`от ${fmtMoney(item.price)}`; cls='lower-cell'; } if(!hiddenByFreshness&&!numeric(v)&&numeric(item.comparison_value)&&rowUnit==='₽/кг')text='нет ставки'; return `<td class="${cls} ${item.manual?'manual-cell':''}" title="${escapeHtml([statusLabel(item),item.captured_at?new Date(item.captured_at).toLocaleString('ru-RU'):'',cleanText(item.message||'')].filter(Boolean).join(' · '))}"><button type="button" class="cell-price" data-edit-price="${escapeHtml(c.id)}" data-price-profile="${escapeHtml(row.profile.id)}" aria-label="Изменить цену: ${escapeHtml(c.label)}, ${escapeHtml(row.profile.range_weight)}">${escapeHtml(text)}<span aria-hidden="true" class="edit-mark">✎</span></button>${item.manual?'<small class="manual-tag">вручную</small>':''}</td>`; }).join('');
     return `<tr class="shipment-row"><td class="range-cell"><strong>${escapeHtml(row.profile.range_weight)}</strong></td><td class="type-cell">${escapeHtml(row.profile.is_minimum_profile?'Минимум':state.unitMode==='per_kg'?'Расчётная стоимость':'Стоимость отправки')}</td><td class="unit-cell">${escapeHtml(rowUnit)}</td>${cells}</tr>`;
   }).join('');
 }
@@ -287,7 +274,7 @@ async function compare(){
 }
 function renderJob(job){
   state.lastJob=job;
-  if($('routeStopButton')){$('routeStopButton').hidden=!['queued','running'].includes(job.status);$('routeStopButton').disabled=!!job.stop_requested;$('routeStopButton').textContent=job.stop_requested?'Сохраняю текущие ответы…':'Остановить загрузку';}
+  if($('routeStopButton')){$('routeStopButton').hidden=!['queued','running'].includes(job.status);$('routeStopButton').disabled=!!job.stop_requested;}
   const results=job.results||[];
   const retry=$('retryFailedButton');
   retry.hidden=!results.some(r=>!r.ok)||['running','queued'].includes(job.status);
@@ -377,7 +364,6 @@ function bulkControls(){
   $('bulkResumeButton').hidden=!['paused','error'].includes(job.status);$('bulkResumeButton').disabled=exporting||bulkState.requesting;
   $('bulkRetryButton').hidden=active||!(job.outcomes?.failed||job.outcomes?.partial);$('bulkRetryButton').disabled=exporting||bulkState.requesting;
   $('bulkExportButton').hidden=active||!job.job_id||(!job.export_outdated&&!['paused','error'].includes(job.status)&&job.export_status!=='error');$('bulkExportButton').disabled=exporting||bulkState.requesting;
-  if($('bulkExtraActions'))$('bulkExtraActions').hidden=$('bulkRetryButton').hidden&&$('bulkExportButton').hidden;
   $('collectButton').disabled=active||state.refreshLocked;
   if(active)$('collectButton').textContent='Идёт общий сбор';else if(!state.refreshLocked)$('collectButton').textContent='Обновить прайсы';
 }
@@ -397,11 +383,11 @@ async function updateBulkPlan(){
 function renderBulk(job){
   bulkState.job=job;bulkControls();if(typeof renderCoverage==='function')renderCoverage(job);
   if(job.status==='idle')return;
-  const labels={queued:'В очереди',running:'Идёт сбор',pausing:'Сохраняю ответы перед остановкой',paused:'Пауза',done:'Проверки завершены',error:'Сбор прерван'};
+  const labels={queued:'В очереди',running:'Идёт сбор',pausing:'Сохраняю проверки перед остановкой',paused:'Пауза',done:'Проверки завершены',error:'Сбор прерван'};
   const current=job.current?` Сейчас: ${job.current.origin} → ${job.current.destination}.`:'';
   const outcomes=job.outcomes||{};
   const exportText=job.export_outdated?' Данные изменились. Пересоберите Excel.':job.export_status==='running'?' Создаётся Excel…':job.export_status==='ready'?' Excel готов.':job.export_status==='error'?' Не удалось создать Excel. Можно повторить выгрузку.':'';
-  $('bulkStatus').textContent=`${({reference:'Основные · 254',extended_reference:'Эталон · 318',all:'Все пары городов',origins:'Выбранные города'})[job.scope]||'Текущий отчёт'}. ${job.mode==='saved'?'Сбор из текущих данных и прайсов':(labels[job.status]||job.status)}. Маршрутов: ${job.completed_routes}/${job.total_routes}. Проверок компаний: ${job.completed_checks}/${job.total_checks}. Полная сетка: ${outcomes.complete||0}; неполные: ${outcomes.partial||0}; ошибки: ${outcomes.failed||0}; без публичного тарифа: ${outcomes.unavailable||0}. ${outcomes.saved?'Обработано из текущих данных: '+outcomes.saved+'. ':''}${current}${exportText} ${job.message||''}`;
+  $('bulkStatus').textContent=`${job.mode==='saved'?'Сбор из текущих данных и прайсов':(labels[job.status]||job.status)}. Маршрутов: ${job.completed_routes}/${job.total_routes}. Проверок компаний: ${job.completed_checks}/${job.total_checks}. Полная сетка: ${outcomes.complete||0}; неполные: ${outcomes.partial||0}; ошибки: ${outcomes.failed||0}; без публичного тарифа: ${outcomes.unavailable||0}. ${outcomes.saved?'Обработано из текущих данных: '+outcomes.saved+'. ':''}${current}${exportText} ${job.message||''}`;
   $('bulkProgress').hidden=false;$('bulkProgress').value=job.percent||0;
   const download=$('bulkDownload');download.hidden=!job.download_url;
   if(job.download_url){download.href=job.download_url;download.textContent=job.total_routes>400?'Скачать Excel-файлы в ZIP':'Скачать большую таблицу';}
@@ -585,7 +571,8 @@ async function applyImport(){
     const data=await getJSON('/api/import/commit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:importsState.token})});
     forgetImportJob(importsState.jobId);importsState.jobId=null;
     importsState.token=null;importsState.companies[data.company]=data.meta;showCurrentImport();
-    $('importMessage').textContent=`Применено ${data.rows} строк. Источник: файл пользователя.`;
+    $('importMessage').textContent=`✓ Файл «${data.meta.original_filename}» применён. Сохранено ${data.rows} цен.`;
+    if(typeof appliedFileNotice==='function')appliedFileNotice({company:data.company,origin:data.origin,destination:data.destination,filename:data.meta.original_filename,applied_prices:data.rows,document_id:data.meta.document_id});
     state.calculationCompanies.add(data.company);
     // Make the explicitly applied document visible immediately, including export.
     state.liveOnly=false;state.includeImports=true;$('liveModeSelect').value='all';
@@ -643,11 +630,59 @@ $('diagnosticsButton').addEventListener('click',()=>{window.location.href='/api/
 
 ['bulkScope','bulkOrigins','bulkDestinations'].forEach(id=>$(id).addEventListener('change',updateBulkPlan));
 [['bulkStartButton','start'],['bulkPauseButton','pause'],['bulkResumeButton','resume'],['bulkRetryButton','retry'],['bulkExportButton','export']].forEach(([id,action])=>$(id).addEventListener('click',()=>bulkAction(action)));
-$('routeStopButton')?.addEventListener('click',async()=>{try{const job=await getJSON('/api/collect/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:state.lastJob.origin,destination:state.lastJob.destination})});renderJob(job);}catch(e){toast(e.message);}});
+$('routeStopButton')?.addEventListener('click',async()=>{try{renderJob(await getJSON('/api/collect/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:state.lastJob.origin,destination:state.lastJob.destination})}));}catch(e){toast(e.message);}});
 $('collectButton').addEventListener('click',updateSources); $('exportButton').addEventListener('click',exportExcel); $('themeButton').addEventListener('click',toggleTheme);
 $('settingsButton').addEventListener('click',openSettings); $('closeSettingsButton').addEventListener('click',closeSettings); $('closeSettingsIcon').addEventListener('click',closeSettings); $('saveSettingsButton').addEventListener('click',saveSettings);
 $('settingsDialog').addEventListener('click',e=>{if(e.target===$('settingsDialog'))closeSettings();});
 setInterval(()=>{if(!document.hidden&&!state.refreshingRoutes.size)resumeRefresh().catch(()=>{});},60000);
+// Explicit, server-persisted cell edits. Drafts never alter calculated prices.
+const editState={cell:null,busy:false};
+const GRAPH_WEIGHTS=[0,1,3,5,10,15,20,35,40,50,100,200,250,300,400,500,600,700,750,800,1000,1200,1500,2000,2500,3000,5000,10000,20000];
+function weightWindow(){
+  const values=[GRAPH_WEIGHTS[Number($('heavyRangeFrom').value)],GRAPH_WEIGHTS[Number($('heavyRangeTo').value)]];
+  $('heavyRangeLabel').textContent=values.map(x=>x.toLocaleString('ru-RU')).join('–')+' кг';
+  ['heavyRangeFrom','heavyRangeTo'].forEach((id,i)=>$(id).setAttribute('aria-valuetext',values[i]+' кг'));
+  return values;
+}
+['heavyRangeFrom','heavyRangeTo'].forEach(id=>$(id).addEventListener('input',()=>{
+  if(Number($('heavyRangeFrom').value)>Number($('heavyRangeTo').value))$(id==='heavyRangeFrom'?'heavyRangeTo':'heavyRangeFrom').value=$(id).value;
+  weightWindow();if(state.matrix)renderTariffGraph(state.matrix);
+}));
+function manualBusy(value){editState.busy=value;['manualPriceSave','manualPriceDelete','manualPriceCancel','manualPriceClose','manualPriceValue','manualPriceUnit'].forEach(id=>$(id).disabled=value);}
+function openManualPrice(company,pid){
+  const row=state.matrix?.profiles?.find(r=>r.profile.id===pid),profile=row?.profile||state.options?.profiles?.find(p=>p.id===pid);
+  if(!profile)return;
+  const item=row?.items?.find(i=>i.company===company)||state.comparison?.items?.find(i=>i.company===company)||{};
+  editState.cell={company,origin:$('originSelect').value,destination:$('destinationSelect').value,profile:pid};
+  const rate=Number(profile.weight_kg)>=100&&!profile.is_minimum_profile;
+  $('manualPriceContext').textContent=`${company} · ${editState.cell.origin} → ${editState.cell.destination} · ${profile.range_weight}`;
+  $('manualPriceUnit').querySelector('[value=rub_per_kg]').disabled=!rate;
+  const unit=item.manual?item.manual_unit:rate?'rub_per_kg':'rub';$('manualPriceUnit').value=unit;
+  const value=item.manual?item.manual_value:unit==='rub_per_kg'?item.published_rate_per_kg:item.comparison_value;
+  $('manualPriceValue').value=numeric(value)?String(value).replace('.',','):'';
+  $('manualPriceDelete').hidden=!item.manual;$('manualPriceMessage').textContent='';
+  manualBusy(false);manualUnitHelp();$('manualPriceDialog').showModal();$('manualPriceValue').focus();$('manualPriceValue').select();
+}
+function manualUnitHelp(){
+  const p=state.options?.profiles?.find(p=>p.id===editState.cell?.profile);
+  $('manualPriceUnitHelp').textContent=$('manualPriceUnit').value==='rub_per_kg'?`Ставка за кг. Сумма отправки будет рассчитана на контрольный вес ${p?.weight_kg} кг.`:Number(p?.weight_kg)>=100?'Сумма за всю отправку. В большой таблице столбец ₽/кг останется пустым: ставку можно заполнить выбором единицы ₽/кг.':'Сумма за всю отправку в этом диапазоне, независимо от режима отображения таблицы.';
+}
+$('manualPriceUnit').addEventListener('change',manualUnitHelp);
+document.addEventListener('click',event=>{const button=event.target.closest('[data-edit-price]');if(button)openManualPrice(button.dataset.editPrice,button.dataset.priceProfile);});
+['manualPriceClose','manualPriceCancel'].forEach(id=>$(id).addEventListener('click',()=>{if(!editState.busy)$('manualPriceDialog').close();}));
+$('manualPriceDialog').addEventListener('cancel',event=>{if(editState.busy)event.preventDefault();});
+async function saveManualPrice(remove=false){
+  if(editState.busy||!editState.cell)return;manualBusy(true);const cell={...editState.cell};
+  try{
+    await getJSON('/api/manual-price',{method:remove?'DELETE':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...cell,value:$('manualPriceValue').value,unit:$('manualPriceUnit').value})});
+    state.liveOnly=false;state.includeImports=true;$('liveModeSelect').value='all';
+    await compare();if(typeof refreshBulkAfterDocuments==='function')await refreshBulkAfterDocuments();
+    $('manualPriceDialog').close();toast(remove?'Ручная цена удалена. Показан доступный источник.':'Цена сохранена. Она доступна при следующем входе и в Excel.');
+  }catch(e){$('manualPriceMessage').textContent=e.message;}finally{manualBusy(false);}
+}
+$('manualPriceForm').addEventListener('submit',e=>{e.preventDefault();saveManualPrice();});
+$('manualPriceDelete').addEventListener('click',()=>saveManualPrice(true));
+
 init().catch(e=>toast(e.message));
 
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!state.refreshingRoutes.size)resumeRefresh().catch(()=>{});});

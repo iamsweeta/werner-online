@@ -13,7 +13,7 @@ class ScanOCR(unittest.TestCase):
     def setUpClass(cls):
         cls.raw=(FIX/'dellin_scan_two_rows.pdf').read_bytes()
         # Integrated MuPDF OCR must work without tesseract / pdftoppm on PATH.
-        with tempfile.TemporaryDirectory() as cache_dir,patch.object(e,'RUNTIME_DIR',Path(cache_dir)),patch.dict(os.environ,{'PATH':'','TESSDATA_PREFIX':'/not-installed'}):
+        with tempfile.TemporaryDirectory() as directory,patch.object(e,'RUNTIME_DIR',Path(directory)),patch.dict(os.environ,{'PATH':'','TESSDATA_PREFIX':'/not-installed'}):
             cls.recognized=ocr.prepare(cls.raw,'ДЛ')
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.context=patch.object(e,'RUNTIME_DIR',Path(self.tmp.name));self.context.start()

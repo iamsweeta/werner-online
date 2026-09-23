@@ -10,10 +10,10 @@ from . import v42_engine as e
 
 
 def cleanup_previews():
-    from . import ocr_cache
-    ocr_cache.cleanup()
     from .route_import_jobs import cleanup
     cleanup()
+    from .ocr_cache import cleanup as cleanup_ocr
+    cleanup_ocr()
     from .price_library import JOBS, LOCK
     with e.STATE_LOCK, LOCK:
         active={key for key,row in JOBS.items() if row.get('status')=='parsing'}
@@ -30,10 +30,12 @@ def summary():
     return {'location':str(root.resolve()),'files':len(files),'bytes':sum(p.stat().st_size for p in files),
             'confirmed_retention':'Бессрочно на сервере приложения (при локальном запуске — на вашем компьютере). Автоматического удаления подтверждённых прайсов нет.',
             'disabled_retention':'Отключённый прайс не участвует в расчётах, но оригинал остаётся на диске.',
-            'ocr_cache_retention_days':7,'ocr_cache_max_bytes':32*1024*1024,'preview_retention_minutes':30,'online_freshness_minutes':30,
+            'ocr_cache_retention_days':7,'ocr_cache_max_bytes':32*1024*1024,
+            'manual_retention':'Ручные цены хранятся без срока удаления.',
+            'preview_retention_minutes':30,'online_freshness_minutes':30,
             'online_retention':'Последние успешные онлайн-цены хранятся без срока удаления; после 30 минут теряют только отметку LIVE.',
             'data_directory':str(e.RUNTIME_DIR.resolve()),
-            'backup_note':'Архив содержит оригиналы, распознанные цены и историю отключений. API-ключи и временные предпросмотры не включаются.'}
+            'backup_note':'Архив содержит оригиналы, распознанные и ручные цены, историю отключений. API-ключи и временные предпросмотры не включаются.'}
 
 
 def backup():
@@ -54,8 +56,10 @@ def backup():
                     try:source.backup(destination)
                     finally:destination.close();source.close()
                     archive.write(snapshot,'imports/documents.sqlite3')
+                for path in sorted((e.RUNTIME_DIR/'manual').glob('*.json')):
+                    if path.is_file() and not path.is_symlink():archive.write(path,'manual/'+path.name)
                 archive.writestr('RESTORE.txt','Закройте приложение. Сохраните копию текущей папки runtime/imports. '
-                                 'Замените её целиком папкой imports из этого архива. Запустите приложение и пересоберите Excel.\n'
+                                 'Замените её целиком папкой imports из этого архива. Также замените runtime/manual папкой manual из архива (если папки нет, удалите старую runtime/manual после сохранения её копии). Запустите приложение и пересоберите Excel.\n'
                                  'Подтверждённые документы и история отключений восстанавливаются вместе. Не объединяйте две базы SQLite.\n')
                 archive.writestr('manifest.json',json.dumps({'created_at':e._now(),'type':'user_documents_backup','schema':1},ensure_ascii=False))
         return target

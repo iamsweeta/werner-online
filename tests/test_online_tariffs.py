@@ -136,7 +136,7 @@ class LifecycleTests(unittest.TestCase):
         q=e.quote('Werner',*self.route,'w100');self.assertEqual(q['price'],1200);self.assertEqual(q['refresh_error'],'HTTP 503')
     def test_partial_progress_visible_before_job_finishes_and_active_job_resumes(self):
         emitted=threading.Event();release=threading.Event()
-        def collect(companies,o,d,profile,on_progress):
+        def collect(companies,o,d,profile,on_progress,*,should_stop=None):
             on_progress({'company':'Werner','ok':True,'rows':1,'message':'ready'});emitted.set();release.wait(3)
             return [{'company':'Werner','ok':True,'rows':1,'message':'ready'},{'company':'ДЛ','ok':False,'rows':0,'message':'HTTP 401'}]
         with patch.object(main,'collect_selected',side_effect=collect):

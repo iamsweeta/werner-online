@@ -1307,8 +1307,7 @@ def collect_selected(companies:list[str], origin:str, destination:str, profile_i
     if profile_id not in PROFILE_BY_ID:
         raise ValueError('Неизвестный весовой профиль')
     companies=list(dict.fromkeys(companies))
-    attempts={}
-    should_stop=should_stop or (lambda:False)
+    attempts={};should_stop=should_stop or (lambda:False)
     results={}
     docs=[c for c in companies if c=='ПЭК' or (c=='КИТ' and normalize_city(origin) in {'Москва','Санкт-Петербург'})]
 
@@ -1398,8 +1397,6 @@ def collect_selected(companies:list[str], origin:str, destination:str, profile_i
         except Exception as exc:return finish(c,error=str(exc))
 
     from contextvars import copy_context
-    # Submit only as slots become available. A pause stops scheduling; already
-    # running requests finish and persist their results before the job pauses.
     tasks=iter([(network_job,c) for c in companies if c not in docs]+([(document_job,None)] if docs else []))
     with ThreadPoolExecutor(max_workers=7) as pool:
         futures={};exhausted=False

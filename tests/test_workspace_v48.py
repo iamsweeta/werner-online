@@ -141,7 +141,7 @@ class WorkspaceDocuments(unittest.TestCase):
         saved=self.save();m=self.manager();m.start('origins',['Казань'],['Уфа'],mode='saved');job=self.done(m)
         self.assertEqual(job['completed_checks'],17);self.assertEqual(job['outcomes'],{'saved':17})
         coverage=next(c for c in job['coverage'] if c['company']=='Werner')
-        self.assertEqual(coverage,{'company':'Werner','online':0,'saved':0,'document':0,'missing':28})
+        self.assertEqual(coverage,{'company':'Werner','online':0,'saved':0,'document':0,'manual':0,'missing':28})
         with io.BytesIO(m.download(job['job_id']).read_bytes()) as buffer:
             wb=load_workbook(buffer,data_only=True)
             self.assertEqual(wb['WernerNEW']['B2'].value,'Казань');self.assertEqual(wb['WernerNEW']['N2'].value,None)
@@ -158,9 +158,9 @@ class WorkspaceDocuments(unittest.TestCase):
         e.save_live_update('Werner','Казань','Уфа',{'w100':{'kind':'exact','price':3000}},{'source_url':'https://example.invalid/test'},aid)
         e.finish_live_attempt('Werner','Казань','Уфа',aid,rows=1)
         m=self.manager();m.start('origins',['Казань'],['Уфа'],mode='saved');job=self.done(m)
-        rows=m._route_rows(job['job_id'],0,'Казань','Уфа',imports.pack('Казань','Уфа'))
+        rows=m._route_rows(job['job_id'],0,'Казань','Уфа',imports.pack('Казань','Уфа'),current=True)
         values={r['profile']['id']:next(i for i in r['items'] if i['company']=='Werner') for r in rows}
-        self.assertEqual(values['w100']['price'],3000);self.assertTrue(values['w100']['collected_online'])
+        self.assertEqual(values['w100']['price'],3000);self.assertFalse(values['w100']['collected_online']);self.assertTrue(values['w100']['online'])
         self.assertEqual(values['w200']['price'],2345);self.assertTrue(values['w200']['uploaded'])
         self.assertEqual(values['min']['price'],600);self.assertTrue(values['min']['uploaded'])
     def test_selected_route_export_does_not_include_other_document_routes(self):

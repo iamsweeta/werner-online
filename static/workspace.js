@@ -126,7 +126,7 @@ async function commitPriceDocument(){
 }
 function renderCoverage(job){
   const rows=job.coverage||[];wsEl('bulkCoverage').hidden=!rows.length;
-  wsEl('bulkCoverageRows').innerHTML=rows.map(r=>`<tr><td><strong>${escapeHtml(r.company)}</strong></td><td>${Number(r.online).toLocaleString('ru-RU')}</td><td>${Number(r.saved||0).toLocaleString('ru-RU')}</td><td>${Number(r.document).toLocaleString('ru-RU')}</td><td class="${r.missing?'coverage-missing':''}">${Number(r.missing).toLocaleString('ru-RU')}</td><td>${r.missing?`<button class="text-button" data-add-price-company="${escapeHtml(r.company)}" type="button">Добавить прайс</button>`:'Заполнено'}</td></tr>`).join('');
+  wsEl('bulkCoverageRows').innerHTML=rows.map(r=>`<tr><td><strong>${escapeHtml(r.company)}</strong></td><td>${Number(r.online).toLocaleString('ru-RU')}</td><td>${Number(r.saved||0).toLocaleString('ru-RU')}</td><td>${Number(r.document).toLocaleString('ru-RU')}</td><td>${Number(r.manual||0).toLocaleString('ru-RU')}</td><td class="${r.missing?'coverage-missing':''}">${Number(r.missing).toLocaleString('ru-RU')}</td><td>${r.missing?`<button class="text-button" data-add-price-company="${escapeHtml(r.company)}" type="button">Добавить прайс</button>`:'Заполнено'}</td></tr>`).join('');
   wsEl('bulkCoverageRows').querySelectorAll('[data-add-price-company]').forEach(button=>button.addEventListener('click',()=>{
     if(!documentState.busy){resetDocumentPreview();wsEl('documentCompany').value=button.dataset.addPriceCompany;documentGuide();}
     setWorkspace('documents',{focus:true});
@@ -196,6 +196,7 @@ async function refreshRouteDocuments(origin,destination){
   const seq=++routeDocumentsState.seq;
   try{
     const data=await getJSON('/api/route-documents?'+new URLSearchParams({origin,destination}));
+    if(appliedReceipt&&appliedReceipt.route!==origin+'|'+destination)wsEl('appliedFileFeedback').hidden=true;
     if(seq!==routeDocumentsState.seq||wsEl('originSelect').value!==origin||wsEl('destinationSelect').value!==destination)return;
     const companies=(state.options?.companies||[]).filter(c=>state.calculationCompanies.has(c.id));
     const matched=(data.files||[]).filter(f=>state.calculationCompanies.has(f.company));
@@ -203,7 +204,7 @@ async function refreshRouteDocuments(origin,destination){
     host.innerHTML=companies.map(company=>{
       const files=matched.filter(f=>f.company===company.id);if(!files.length)return '';
       const chosen=files.find(f=>f.selected);
-      return `<div class="route-document-choice"><label class="field"><span>${escapeHtml(company.label)} · источник для этого направления</span><select data-route-document="${escapeHtml(company.id)}"><option value="">Автоматически · онлайн, затем библиотека</option>${files.map(f=>`<option value="${escapeHtml(f.id)}" ${f.selected?'selected':''}>${escapeHtml(f.original_filename)} · ${f.route_values_count} цен · ${escapeHtml(f.document_date||'дата не указана')} · загружен ${escapeHtml(f.uploaded_at?new Date(f.uploaded_at).toLocaleString('ru-RU'):'дата не сохранена')}</option>`).join('')}</select></label><button type="button" class="button secondary" data-use-route-document="${escapeHtml(company.id)}">Применить</button><small>${chosen?'Выбран файл: '+escapeHtml(chosen.original_filename)+'. Цены из него имеют приоритет.':'Автоматический выбор. Можно назначить конкретный файл из списка.'}</small></div>`;
+      return `<div class="route-document-choice"><label class="field"><span>${escapeHtml(company.label)} · источник для этого направления</span><select data-route-document="${escapeHtml(company.id)}"><option value="">Автоматически · онлайн, затем библиотека</option>${files.map(f=>`<option value="${escapeHtml(f.id)}" ${f.selected?'selected':''}>${escapeHtml(f.original_filename)} · ${f.route_values_count} цен · ${escapeHtml(f.document_date||'дата не указана')} · загружен ${escapeHtml(f.uploaded_at?new Date(f.uploaded_at).toLocaleString('ru-RU'):'дата не сохранена')}</option>`).join('')}</select></label><button type="button" class="button secondary" data-use-route-document="${escapeHtml(company.id)}">Применить</button><small>${chosen?'✓ Применён файл: '+escapeHtml(chosen.original_filename)+'. Цены из него имеют приоритет.':'Автоматический выбор. Можно назначить конкретный файл из списка.'}</small></div>`;
     }).join('');
     host.querySelectorAll('[data-use-route-document]').forEach(button=>button.addEventListener('click',async()=>{
       const company=button.dataset.useRouteDocument;
@@ -211,10 +212,11 @@ async function refreshRouteDocuments(origin,destination){
       routeDocumentsState.busy=true;routeDocumentsState.seq++;
       host.querySelectorAll('select,button').forEach(el=>el.disabled=true);
       try{
-        await getJSON('/api/route-documents/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company,origin,destination,document_id:select.value||null})});
+        const receipt=await getJSON('/api/route-documents/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company,origin,destination,document_id:select.value||null})});
+        appliedFileNotice(receipt);
         showDocumentPrices();await compare();await refreshBulkAfterDocuments();
-        toast(`Источник сохранён: ${company} · ${origin} → ${destination}`);
-      }catch(e){toast(e.message);}
+        toast(select.value?`Файл применён: ${company} · ${origin} → ${destination}`:'Автоматический выбор источника включён');
+      }catch(e){const note=wsEl('appliedFileFeedback');note.hidden=false;note.classList.add('error');note.textContent='Не удалось применить файл: '+e.message;toast(e.message);}
       finally{routeDocumentsState.busy=false;await refreshRouteDocuments(wsEl('originSelect').value,wsEl('destinationSelect').value);}
     }));
   }catch(e){if(seq===routeDocumentsState.seq)wsEl('routeDocumentStatus').textContent='Не удалось прочитать библиотеку: '+e.message;}
@@ -229,11 +231,11 @@ async function openDocumentRoutes(button){
       const route=data.routes[Number(host.querySelector('select').value)];if(!route)return;
       const action=host.querySelector('button');action.disabled=true;
       try{
-        await getJSON('/api/route-documents/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company:data.company,origin:route.origin,destination:route.destination,document_id:data.id})});
+        const receipt=await getJSON('/api/route-documents/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company:data.company,origin:route.origin,destination:route.destination,document_id:data.id})});
         showDocumentPrices();state.calculationCompanies.add(data.company);
         // Documents may name destinations outside the shortened main catalog.
         wsEl('extendedRoutesToggle').checked=true;
-        await changeRoute(route.origin,route.destination);setWorkspace('route',{focus:true});
+        await changeRoute(route.origin,route.destination);setWorkspace('route',{focus:true});appliedFileNotice(receipt);
         await refreshBulkAfterDocuments();toast('Цены из выбранного файла применены к направлению.');
       }catch(e){toast(e.message);}
       finally{action.disabled=false;}
@@ -243,14 +245,22 @@ async function openDocumentRoutes(button){
 }
 wsEl('routeLibraryButton')?.addEventListener('click',()=>setWorkspace('documents',{focus:true}));
 
+let appliedReceipt=null;
+function appliedFileNotice(data){
+  const name=data.filename||data.original_filename;
+  const message=name?`✓ Файл «${name}» применён: ${data.company}, ${data.origin} → ${data.destination}. Применено цен: ${data.applied_prices||data.rows||0}. Данные сохранены и доступны в обеих выгрузках.`:`✓ Автоматический выбор источника сохранён: ${data.company}.`;
+  appliedReceipt={route:data.origin+'|'+data.destination,message};
+  const node=wsEl('appliedFileFeedback');node.hidden=false;node.classList.remove('error');node.textContent=message+(data.replaced_manual?` Заменено ручных цен: ${data.replaced_manual}.`:'');
+}
+
 async function loadBulkHistory(){
   try{
     const result=await getJSON('/api/bulk/history');
-    const labels={reference:'Основные · 254',extended_reference:'Эталон · 318',all:'Все пары городов',origins:'Выбранные города'};
-    const statuses={paused:'На паузе',done:'Завершено',error:'Прервано',running:'Идёт загрузка',queued:'В очереди',pausing:'Остановка'};
-    wsEl('bulkHistory').innerHTML=(result.jobs||[]).map(j=>`<div class="history-row"><span><strong>${escapeHtml(labels[j.scope]||j.scope)}</strong> · ${escapeHtml(statuses[j.status]||j.status)}<small>${escapeHtml(new Date(j.created_at).toLocaleString('ru-RU'))} · ${j.mode==='saved'?'Из сохранённых цен':'Онлайн'}</small></span><button class="text-button" type="button" data-history-job="${escapeHtml(j.job_id)}">Открыть</button></div>`).join('')||'<p>Пока нет загрузок.</p>';
-    wsEl('bulkHistory').querySelectorAll('[data-history-job]').forEach(btn=>btn.addEventListener('click',async()=>{
-      try{if(state.bulkActive){toast('Сначала остановите текущую загрузку.');return;}const job=await getJSON('/api/bulk/'+encodeURIComponent(btn.dataset.historyJob));renderBulk(job);wsEl('bulkStatus').scrollIntoView?.({block:'center',behavior:'smooth'});}catch(e){toast(e.message);}
+    const names={reference:'Основные · 254',extended_reference:'Эталон · 318',all:'Все пары городов',origins:'Выбранные города'};
+    const states={paused:'На паузе',done:'Завершено',error:'Прервано',running:'Идёт загрузка',queued:'В очереди',pausing:'Остановка'};
+    wsEl('bulkHistory').innerHTML=(result.jobs||[]).map(j=>`<div class="history-row"><span>${escapeHtml(names[j.scope]||j.scope)} · ${escapeHtml(states[j.status]||j.status)}<small>${escapeHtml(new Date(j.created_at).toLocaleString('ru-RU'))}</small></span><button type="button" class="text-button" data-history-job="${escapeHtml(j.job_id)}">Открыть</button></div>`).join('')||'<p>Пока нет загрузок.</p>';
+    wsEl('bulkHistory').querySelectorAll('[data-history-job]').forEach(button=>button.addEventListener('click',async()=>{
+      try{if(state.bulkActive){toast('Сначала остановите текущую загрузку.');return;}renderBulk(await getJSON('/api/bulk/'+encodeURIComponent(button.dataset.historyJob)));}catch(e){toast(e.message);}
     }));
-  }catch{if(wsEl('bulkHistory'))wsEl('bulkHistory').textContent='История временно недоступна. Сохранённые цены остаются в расчётах.';}
+  }catch{wsEl('bulkHistory').textContent='История временно недоступна. Сохранённые цены остаются в таблице.';}
 }

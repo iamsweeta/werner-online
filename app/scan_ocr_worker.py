@@ -4,7 +4,7 @@ No prices, city-specific tariffs or inferred numeric substitutions live here.
 The worker is a separate process: MuPDF is not shared between server threads.
 """
 from __future__ import annotations
-import bisect, hashlib, io, json, math, re, statistics, sys
+import bisect, io, json, math, re, statistics, sys
 from pathlib import Path
 
 KG_BOUNDS=[(5000,10000),(3000,4999),(2500,2999),(2000,2499),(1500,1999),
@@ -217,26 +217,22 @@ def route_bands(names,destination,body,bottom):
 
 
 def header_image(page,body):
-    import pymupdf as fitz
-    pix=page.get_pixmap(dpi=150,clip=(0,0,page.rect.width,body),colorspace=fitz.csGRAY,alpha=False)
-    return hashlib.sha256(pix.samples).digest()
+    import hashlib,pymupdf as fitz
+    pix=page.get_pixmap(dpi=150,clip=fitz.Rect(0,0,page.rect.width,body),colorspace=fitz.csGRAY,alpha=False)
+    return (tuple(page.rect),pix.width,pix.height,hashlib.sha256(pix.samples).hexdigest())
 
 
 def page_layout(page,angle,templates):
     import pymupdf as fitz
     if angle is not None:
         page.set_rotation(angle)
-        for template in templates:
-            if tuple(page.rect)==template['rect'] and header_image(page,template['layout'][1])==template['image']:
-                _stage('Заголовок совпал с уже проверенным')
-                return template['initial'],template['layout'],angle,True
+        for cached,initial,layout in templates:
+            if header_image(page,layout[1])==cached:return initial,layout,angle,True
         if templates:
-            edges,body,_=templates[-1]['layout']
-            initial=ocr(page,(edges[6],0,edges[-1],min(body+2,page.rect.height*.13)),300,'eng',stage='Читаю весовой заголовок')
+            edges,body,_=templates[-1][2]
+            initial=ocr(page,(edges[6],0,edges[-1],min(body+2,page.rect.height*.13)),300,'eng',stage='Проверяю повторяющийся заголовок')
             if header_sequence(initial):
-                layout=header(page,initial)
-                templates.append({'rect':tuple(page.rect),'image':header_image(page,layout[1]),'initial':initial,'layout':layout})
-                del templates[:-8]
+                layout=header(page,initial);templates.append((header_image(page,layout[1]),initial,layout));templates[:]=templates[-8:]
                 return initial,layout,angle,False
     initial=[]
     angles=[angle] if angle is not None else ([90,0,270,180] if page.rect.height>page.rect.width else [0,90,180,270])
@@ -250,9 +246,7 @@ def page_layout(page,angle,templates):
         if portion<.30 and not header_sequence(initial) and not other_section:
             initial=ocr(page,(0,0,page.rect.width,page.rect.height*.30),300,'rus+eng',stage='Ищу заголовок в расширенной области')
         if header_sequence(initial):
-            layout=header(page,initial)
-            templates.append({'rect':tuple(page.rect),'image':header_image(page,layout[1]),'initial':initial,'layout':layout})
-            del templates[:-8]
+            layout=header(page,initial);templates.append((header_image(page,layout[1]),initial,layout));templates[:]=templates[-8:]
             return initial,layout,trial,False
     return initial,None,angle,False
 
@@ -263,16 +257,16 @@ def recognize(path,progress=lambda *a:None,origin_filter=None,destination=None):
     from .tariff_documents import dated
     from .source_conditions import tax_basis
     global _stage
-    result={'rows':[],'errors':[],'ocr':True,'ocr_pages':[]};origin=None;angle=None;matches=[]
+    result={'rows':[],'errors':[],'ocr':True,'ocr_pages':[]};origin=None;angle=None;matches=[];templates=[]
     from .vector_ocr import Glyphs,fast_rows
-    glyphs=Glyphs();templates=[]
+    glyphs=Glyphs()
     with fitz.open(path) as doc:
         if len(doc)>40:raise ValueError('Для OCR загрузите не более 40 страниц за раз. Текстовый PDF поддерживает до 80 страниц.')
         for i,page in enumerate(doc):
             _stage=lambda message:progress(i+1,len(doc),f'Страница {i+1} из {len(doc)} · {message}')
             _stage('Ищу межтерминальную таблицу')
             initial,layout,angle,reused=page_layout(page,angle,templates)
-            if reused:result.setdefault('header_reuse_pages',[]).append(i+1)
+            if reused:result.setdefault('reused_header_pages',[]).append(i+1)
             if not header_sequence(initial):
                 if origin:
                     title=as_text(initial)
@@ -302,12 +296,8 @@ def recognize(path,progress=lambda *a:None,origin_filter=None,destination=None):
                 for band in route_bands(names,destination,body,page.rect.height-10):
                     matches.append((i,angle,initial,layout,band,names))
                 continue
-            fast=fast_rows(page,layout,i+1,glyphs)
-            if fast is not None:
-                rows,errors,_=fast;result.setdefault("vector_pages",[]).append(i+1)
-            else:
-                _stage("Читаю таблицу обычным OCR")
-                rows,errors,_=page_rows(page,initial,i+1,layout=layout)
+            optimized=fast_rows(page,layout,i+1,glyphs)
+            rows,errors,_=optimized or page_rows(page,initial,i+1,layout=layout)
             result['rows'].extend(rows);result['errors'].extend(errors);result['ocr_pages'].append(i+1)
         if destination:
             if not matches:raise ValueError(f'OCR: в межтерминальной таблице не найдена однозначная строка города {destination}. Проверьте документ и выбранное направление.')

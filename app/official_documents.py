@@ -1,5 +1,6 @@
 """Public document endpoints used by Dellin / Vozovoz's own tariff pages."""
 from __future__ import annotations
+from .business_time import tariff_today
 
 import json
 import re
@@ -157,4 +158,4 @@ def collect(company,origin,destination):
 def _check_current_document(parsed):
     if parsed.get('document_date'):
         from datetime import date
-        if date.fromisoformat(parsed['document_date'])>date.today():raise ValueError('Документ содержит будущие тарифы вместо текущих')
+        if date.fromisoformat(parsed['document_date'])>tariff_today():raise ValueError('Документ содержит будущие тарифы вместо текущих')

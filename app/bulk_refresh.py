@@ -2,7 +2,8 @@
 
 SQLite checkpoints after each carrier. Closing the browser does not interrupt
 the worker. A server restart pauses the job; resume retries only unfinished
-carriers. Exports read the shared last-known prices and confirmed documents.
+carriers. Exports use shared current prices, confirmed documents and manual cells;
+the original collection checkpoints remain available for audit.
 """
 from __future__ import annotations
 
@@ -171,7 +172,7 @@ class BulkManager:
             last=db.execute('SELECT idx,company,status,payload FROM results WHERE job=? ORDER BY rowid DESC LIMIT 18',(ident,)).fetchall()
         config=json.loads(job['config'])
         from .document_imports import revision
-        outdated=bool(job['export_status']=='ready' and (config.get('export_schema')!=58 or config.get('export_price_revision')!=e.price_revision() or (config.get('include_imports',True) and config.get('export_document_revision')!=revision())))
+        outdated=bool(job['export_status']=='ready' and (config.get('export_schema')!=59 or config.get('export_price_revision')!=e.price_revision() or (config.get('include_imports',True) and config.get('export_document_revision')!=revision())))
         job.pop('config');job.pop('export_file')
         total=sum(counts.values());done=counts.get('done',0)
         job.update({'job_id':ident,'scope':config['scope'],'companies':config['companies'],
@@ -210,7 +211,7 @@ class BulkManager:
     def pause(self,ident):
         with self.guard,self.db() as db:
             self._job(ident)
-            db.execute("UPDATE jobs SET status='pausing',message='Останавливаю новые запросы. Текущие ответы будут сохранены.',updated_at=? WHERE id=? AND status IN ('queued','running')",(now(),ident))
+            db.execute("UPDATE jobs SET status='pausing',message='Останавливаю новые компании. Текущие проверки будут сохранены.',updated_at=? WHERE id=? AND status IN ('queued','running')",(now(),ident))
         return self.status(ident)
 
     def resume(self,ident,retry=False):
@@ -302,19 +303,15 @@ class BulkManager:
             stored={r['company']:json.loads(zlib.decompress(r['payload'])) for r in db.execute('SELECT company,payload FROM results WHERE job=? AND idx=?',(ident,idx))}
         by={c:{i['profile_id']:i for i in row['items']} for c,row in stored.items()}
         if current:
-            # Every screen and every new export uses the same persistent prices.
-            # A job's evidence remains immutable for diagnostics, not as a filter
-            # that hides prices collected in another run or in One Route.
-            with e.STATE_LOCK:live=e._live_pack(o,d)
+            with e.STATE_LOCK:packs=(e._base_pack(o,d),e._live_pack(o,d),imports or {})
             output=[]
             for p in e.COMMON_PROFILES:
                 items=[]
                 for company in e.COMPANIES:
-                    item=e._route_quote(company,o,d,p['id'],({},live,imports or {}))
+                    item=e._route_quote(company,o,d,p['id'],packs)
                     prior=by.get(company,{}).get(p['id'],{})
-                    item['collected_online']=bool(not item.get('uploaded') and prior.get('collected_online') and item.get('captured_at')==prior.get('captured_at') and item.get('price')==prior.get('price'))
-                    item['checked_at']=item.get('captured_at')
-                    item['bulk_status']='document' if item.get('uploaded') else 'saved'
+                    item['collected_online']=bool(not item.get('manual') and not item.get('uploaded') and prior.get('collected_online') and item.get('captured_at')==prior.get('captured_at') and item.get('price')==prior.get('price'))
+                    item['checked_at']=item.get('captured_at');item['bulk_status']='manual' if item.get('manual') else 'document' if item.get('uploaded') else 'saved'
                     items.append(item)
                 output.append({'profile':deepcopy(p),'items':items})
             return output
@@ -369,7 +366,6 @@ class BulkManager:
             from .document_imports import revision
             document_revision=revision()
             price_revision=e.price_revision()
-            # Preserve the full selected structure, even when collection is paused.
             routes=all_routes
             part_size=len(routes) if len(routes)<=SINGLE_WORKBOOK_LIMIT else PART_SIZE
             parts=[routes[i:i+part_size] for i in range(0,len(routes),part_size)]
@@ -377,11 +373,11 @@ class BulkManager:
             info={k:job[k] for k in ('job_id','created_at','updated_at','status','total_routes','completed_routes','completed_checks','total_checks','outcomes')}
             info['include_imports']=config.get('include_imports',True);info['mode']=config.get('mode','online')
             files=[]
-            coverage={c:{'company':c,'online':0,'saved':0,'document':0,'missing':0} for c in e.COMPANIES}
+            coverage={c:{'company':c,'online':0,'saved':0,'document':0,'manual':0,'missing':0} for c in e.COMPANIES}
             for number,part in enumerate(parts,1):
                 index={(r['origin'],r['destination']):r['idx'] for r in part}
-                # One version of user documents for the whole workbook. Online
-                # replies are already frozen in this collection's checkpoints.
+                # Documents share one snapshot per workbook. Source revisions
+                # invalidate the download if any prices change during export.
                 from .document_imports import pack as imported_pack
                 with e.STATE_LOCK:
                     documents={route:imported_pack(*route) for route in index} if info['include_imports'] else {}
@@ -390,7 +386,7 @@ class BulkManager:
                     for row in rows:
                         if row['profile']['id']=='min':continue
                         for item in row['items']:
-                            key=('document' if item.get('uploaded') else 'online' if item.get('collected_online') else 'saved') if tariff_value(item,row['profile']) is not None else 'missing'
+                            key=('manual' if item.get('manual') else 'document' if item.get('uploaded') else 'online' if item.get('collected_online') else 'saved') if tariff_value(item,row['profile']) is not None else 'missing'
                             coverage[item['company']][key]+=1
                     return rows
                 content=export_bytes(*next(iter(index)),list(e.COMPANIES),live_only=False,include_imports=False,
@@ -411,12 +407,12 @@ class BulkManager:
                     for file in files:out.write(file,file.name)
                     out.writestr('routes.csv',manifest.getvalue().encode('utf-8-sig'))
                     out.writestr('collection.json',json.dumps(info,ensure_ascii=False,indent=2).encode())
-                    out.writestr('README.txt','Последние сохранённые онлайн-данные всех сборов и подтверждённые прайсы, если включены документы. Даты и источники — на листе Источники. Для обновления запустите новый общий сбор в приложении. Маршруты перечислены в routes.csv.'.encode('utf-8'))
+                    out.writestr('README.txt','Последние доступные онлайн-цены, подтверждённые прайсы и ручные значения из общей базы; данные могут иметь разные даты. Даты и источники — на листе Источники. Для обновления запустите новый общий сбор в приложении. Маршруты перечислены в routes.csv.'.encode('utf-8'))
                 temp.replace(output)
             with self.db() as db:
                 config['export_document_revision']=document_revision
                 config['export_price_revision']=price_revision
-                config['export_schema']=58
+                config['export_schema']=59
                 config['coverage']=list(coverage.values())
                 db.execute("UPDATE jobs SET export_status='ready',export_file=?,config=?,message='Excel готов. Даты проверки указаны в файле.' WHERE id=?",(str(output.resolve()),json.dumps(config,ensure_ascii=False),ident))
         except Exception as exc:
@@ -439,6 +435,7 @@ def fill_document_gaps(rows,imports,origin,destination):
         pid=row['profile']['id']
         if pid=='min':continue
         for pos,item in enumerate(row['items']):
+            if item.get('manual'):continue
             company=item['company'];value=imports.get('profiles',{}).get(pid,{}).get(company)
             pinned=bool(value and value.get('document_selected'))
             if not pinned and item.get('collected_online') and tariff_value(item,row['profile']) is not None:continue
@@ -449,6 +446,7 @@ def fill_document_gaps(rows,imports,origin,destination):
                                   'refresh_error':item.get('refresh_error'),'checked_at':item.get('checked_at')}
     minimum=next(r for r in rows if r['profile']['id']=='min')
     for pos,item in enumerate(minimum['items']):
+        if item.get('manual'):continue
         company=item['company']
         candidates=[r['items'][pos] for r in rows if r['profile']['id']!='min' and r['items'][pos].get('comparison_value') is not None and not r['items'][pos].get('price_is_minimum')]
         if item.get('comparison_value') is not None and not item.get('price_is_minimum'):candidates.append(item)

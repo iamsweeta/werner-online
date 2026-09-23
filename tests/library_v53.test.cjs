@@ -18,7 +18,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));async function until(fn){for(le
   else if(p==='/api/storage')data={files:2,bytes:100,confirmed_retention:'Сохранено'};
   else if(p==='/api/price-documents')data={files};
   else if(p==='/api/route-documents')data={origin:'Москва',destination:'Санкт-Петербург',files:files.map(f=>({...f,selected:f.id===selected,route_values_count:1})),total_files:2};
-  else if(p==='/api/route-documents/select'){const body=JSON.parse(request.body);assert.equal(body.origin,'Москва');assert.equal(body.destination,'Санкт-Петербург');assert.equal(body.company,'ДЛ');selected=body.document_id;postCount++;data={ok:true};}
+  else if(p==='/api/route-documents/select'){const body=JSON.parse(request.body);assert.equal(body.origin,'Москва');assert.equal(body.destination,'Санкт-Петербург');assert.equal(body.company,'ДЛ');selected=body.document_id;postCount++;data={ok:true,company:body.company,origin:body.origin,destination:body.destination,filename:files.find(f=>f.id===selected)?.original_filename,applied_prices:1};}
   else if(p==='/api/price-documents/'+ids[1]+'/routes')data={id:ids[1],company:'ДЛ',routes:[{origin:'Москва',destination:'Санкт-Петербург',values_count:1}]};
   else throw Error('Unexpected '+url);
   return {ok:true,json:async()=>data};
@@ -28,6 +28,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));async function until(fn){for(le
  $('liveModeSelect').value='live';$('liveModeSelect').dispatchEvent(new w.Event('change'));
  $('routeDocumentList').querySelector('select').value=ids[0];$('routeDocumentList').querySelector('button').click();
  await until(()=>postCount===1&&$('comparisonTable').textContent.includes('1\u00a0200')&&!$('routeDocumentList').querySelector('button').disabled);
+ assert.equal($('appliedFileFeedback').hidden,false);assert.match($('appliedFileFeedback').textContent,/Файл «price-0.pdf» применён/);assert.match($('appliedFileFeedback').textContent,/Применено цен: 1/);
  assert.equal($('liveModeSelect').value,'all');assert.match($('comparisonTable').textContent,/Выбранный файл/);
  assert.match(w.queryString(),/live_only=false/);
  $('routeDocumentList').querySelector('select').value='';$('routeDocumentList').querySelector('button').click();

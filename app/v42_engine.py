@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .business_time import tariff_today
 
 import json
 import os
@@ -141,7 +142,8 @@ def _robust_json_write(path: Path, payload: Any) -> None:
 def _base_pack(origin: str, destination: str) -> dict[str, Any]:
     # Installation files are structure/catalogues, never a source of prices.
     # Keep this boundary even when upgrading an installation with old data/v42.
-    return {"profiles":{},"companies":{},"route":{"origin":origin,"destination":destination}}
+    from .manual_prices import pack
+    return {"profiles":{},"companies":{},"route":{"origin":origin,"destination":destination},"_manual":pack(origin,destination)}
 
 def _live_pack(origin: str, destination: str) -> dict[str, Any]:
     o,d=route_pair(origin,destination)
@@ -150,8 +152,9 @@ def _live_pack(origin: str, destination: str) -> dict[str, Any]:
 def _write_live(origin: str, destination: str, live: dict[str, Any]) -> None:
     _robust_json_write(_route_cfg(origin,destination)['live'], live)
 
-def price_revision() -> str:
+def price_revision():
     return _read_json(RUNTIME_DIR/'prices_revision.json',{}).get('revision','0')
+
 
 def live_path_for(origin: str, destination: str) -> Path:
     return _route_cfg(origin,destination)["live"]
@@ -205,7 +208,7 @@ def save_live_update(company: str, origin: str, destination: str, profile_values
             document_date=item.get('document_date') or meta.get('document_date')
             if document_date:
                 from datetime import date
-                if date.fromisoformat(document_date)>date.today():
+                if date.fromisoformat(document_date)>tariff_today():
                     raise ValueError('Источник содержит будущие тарифы; текущая цена не заменена')
             row={**item,
                  "attempt_id":aid,"captured_at":item.get("captured_at") or captured_at,"data_origin":"online",
@@ -216,7 +219,7 @@ def save_live_update(company: str, origin: str, destination: str, profile_values
         company_meta.update({k:v for k,v in meta.items() if v is not None})
         company_meta.update({"current_attempt_id":aid,"last_success_at":captured_at,"data_origin":"online"})
         _write_live(origin,destination,live)
-        _robust_json_write(RUNTIME_DIR/'prices_revision.json',{'revision':uuid.uuid4().hex,'updated_at':_now()})
+        _robust_json_write(RUNTIME_DIR/"prices_revision.json",{"revision":uuid.uuid4().hex,"updated_at":_now()})
 
 def finish_live_attempt(company: str, origin: str, destination: str, attempt_id: str, *, rows: int, error: str | None=None) -> None:
     with STATE_LOCK:
@@ -247,6 +250,11 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
     o,d=route_pair(origin,destination); p=PROFILE_BY_ID[profile_id]
     from .document_imports import pack as imported_pack
     base_pack,live,imports=packs if packs is not None else (_base_pack(o,d),_live_pack(o,d),imported_pack(o,d))
+    from . import manual_prices
+    manual=(base_pack.get('_manual') if '_manual' in base_pack else manual_prices.pack(o,d))
+    base_pack={**base_pack,'_manual':manual}
+    manual_row=manual.get('profiles',{}).get(profile_id,{}).get(company)
+    if manual_row:return manual_prices.quote(manual_row,company,profile_id)
     if profile_id == 'min' and derive_minimum:
         packs = (base_pack, live, imports)
         candidates = [_route_quote(company, o, d, p['id'], packs, derive_minimum=False)
@@ -256,8 +264,8 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
                       and math.isfinite(x['price']) and x['price'] > 0]
         # A 100 kg quote alone cannot prove a carrier's smallest shipment price.
         # Require its explicit minimum or the first comparison weight (0–1 kg).
-        for source in ('selected', 'online', 'uploaded', 'last_good'):
-            pool = [x for x in candidates if x.get('document_selected')] if source == 'selected' else [x for x in candidates if x.get('uploaded')] if source == 'uploaded' else (
+        for source in ('manual','selected', 'online', 'uploaded', 'last_good'):
+            pool = [x for x in candidates if x.get('manual')] if source=='manual' else [x for x in candidates if x.get('document_selected')] if source == 'selected' else [x for x in candidates if x.get('uploaded')] if source == 'uploaded' else (
                 [x for x in candidates if x.get('online')] if source == 'online' else
                 [x for x in candidates if not x.get('online') and not x.get('uploaded')])
             if not any(x['profile_id'] in {'min','w001'} for x in pool):
