@@ -51,7 +51,7 @@ function exactViewValue(item, profile){
 }
 function updateUnitLabels(){
   const note=$('unitModeNote');if(note)note.textContent=state.unitMode==='per_kg'?'₽/кг = стоимость отправки ÷ контрольный вес. Это расчётная величина, включая минимальную плату. МИН всегда в ₽.':'Показана стоимость всей отправки на контрольном весе. МИН — минимальная стоимость отправления по компании.';
-  for(const [key,label] of Object.entries({small:'0–50 кг',medium:'100–1500 кг',heavy:'1500–5000 кг'})){const option=$('graphScopeSelect')?.querySelector(`option[value=${key}]`);if(option)option.textContent=label+' · '+(state.unitMode==='per_kg'?'расчётная стоимость, ₽/кг':'₽ за отправку');}
+  for(const [key,label] of Object.entries({small:'0–50 кг',medium:'100–1500 кг',heavy:'1500–5000 кг'})){const option=$('graphScopeSelect')?.querySelector(`option[value=${key}]`);if(option)option.textContent=label+' · '+(key!=='small'&&state.unitMode==='per_kg'?'расчётная стоимость, ₽/кг':'₽ за отправку');}
   const ps=$('profileSelect'); const profiles=state.options?.profiles||[];
   if(ps && profiles.length){ const selected=ps.value; ps.innerHTML=profiles.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.description)} · ${escapeHtml(p.is_minimum_profile?'Минимум':state.unitMode==='per_kg'?'Расчётная стоимость':'Стоимость отправки')} · ${escapeHtml(activeUnit(p))}</option>`).join(''); if(profiles.some(p=>p.id===selected)) ps.value=selected; }
 }
@@ -132,20 +132,36 @@ function graphSegments(points){
   if(current.length) segments.push(current);
   return segments;
 }
+const HEAVY_WEIGHTS=[100,200,250,300,400,500,600,700,750,800,1000,1200,1500,2000,2500,3000,5000,10000,20000];
+function heavyWindow(){
+  const from=Number($('heavyRangeFrom').value),to=Number($('heavyRangeTo').value);
+  const pair=[HEAVY_WEIGHTS[from],HEAVY_WEIGHTS[to]];
+  $('heavyRangeLabel').textContent=pair.map(w=>w.toLocaleString('ru-RU')).join('–')+' кг';
+  $('heavyRangeFrom').setAttribute('aria-valuetext',pair[0]+' кг');
+  $('heavyRangeTo').setAttribute('aria-valuetext',pair[1]+' кг');
+  return pair;
+}
+['heavyRangeFrom','heavyRangeTo'].forEach(id=>$(id)?.addEventListener('input',()=>{
+  if(Number($('heavyRangeFrom').value)>Number($('heavyRangeTo').value))$(id==='heavyRangeFrom'?'heavyRangeTo':'heavyRangeFrom').value=$(id).value;
+  heavyWindow();if(state.matrix)renderTariffGraph(state.matrix);
+}));
 function renderTariffGraph(data){
   const host=$('rateChart');
   const legend=$('graphLegend');
   if(!host || !legend) return;
   const scope=state.graphScope||'small';
+  const graphUnit=scope==='small'?'₽':activeUnit({});
+  $('graphExplainer').textContent=scope==='small'?'0–50 кг: стоимость за всю отправку в рублях.':'100 кг–20 т: масштаб меняется по выбранным границам. Единица — '+graphUnit+'.';
+  if($('heavyRangeControls'))$('heavyRangeControls').hidden=scope!=='custom';
   let rows=(data?.profiles||[]).filter(r=>!r.profile?.is_minimum_profile);
-  const [minWeight,maxWeight]=({small:[0,50],medium:[100,1500],heavy:[1500,5000]})[scope]||[0,50];
+  const [minWeight,maxWeight]=scope==='custom'?heavyWindow():(({small:[0,50],medium:[100,1500],heavy:[1500,5000]})[scope]||[0,50]);
   rows=rows.filter(r=>Number(r.profile?.weight_kg)>0&&Number(r.profile.weight_kg)>=minWeight&&Number(r.profile.weight_kg)<=maxWeight);
   const companies=(state.options?.companies||[]).filter(c=>state.calculationCompanies.has(c.id));
   if(!rows.length || !companies.length){ host.innerHTML='<div class="empty">Нет данных для выбранного масштаба графика.</div>'; legend.innerHTML=''; return; }
   const series=companies.map((company,idx)=>{
     const values=rows.map(row=>{
       const item=(row.items||[]).find(x=>x.company===company.id);
-      const v=item && !item.price_is_minimum && visiblePrice(item) ? exactViewValue(item,row.profile) : null;
+      const v=item && !item.price_is_minimum && visiblePrice(item) ? (scope==='small'?item.comparison_value:exactViewValue(item,row.profile)) : null;
       return numeric(v) ? Number(v) : null;
     });
     return {company,...company,color:graphColor(idx),values,count:values.filter(numeric).length};
@@ -176,9 +192,9 @@ function renderTariffGraph(data){
   visible.forEach(s=>{
     const points=s.values.map((v,i)=>numeric(v)?{x:x(i),y:y(v),v:Number(v),label:rows[i].profile?.range_weight}:null);
     graphSegments(points).forEach(seg=>{ if(seg.length>=2){ const d=seg.map((p,i)=>`${i?'L':'M'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' '); paths.push(`<path d="${d}" class="graph-series-line" style="--series-color:${s.color}"/>`); } });
-    points.filter(Boolean).forEach(p=>paths.push(`<circle cx="${p.x}" cy="${p.y}" r="4" class="graph-series-point" style="--series-color:${s.color}"><title>${escapeHtml(s.label)} · ${escapeHtml(p.label)} · ${escapeHtml(fmt(p.v,activeUnit(rows[0]?.profile)))}</title></circle>`));
+    points.filter(Boolean).forEach(p=>paths.push(`<circle cx="${p.x}" cy="${p.y}" r="4" class="graph-series-point" style="--series-color:${s.color}"><title>${escapeHtml(s.label)} · ${escapeHtml(p.label)} · ${escapeHtml(fmt(p.v,graphUnit))}</title></circle>`));
   });
-  const graphUnit=activeUnit(rows[0]?.profile);
+
   const scopeText=`${minWeight}–${maxWeight} кг · ${graphUnit}`;
   host.innerHTML=`<div class="graph-scroll"><svg class="tariff-graph" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="График тарифов компаний по весовым диапазонам"><text x="18" y="${m.top+plotH/2}" transform="rotate(-90 18 ${m.top+plotH/2})" class="graph-axis-title">${graphUnit}</text>${marker}${grid.join('')}<line x1="${m.left}" x2="${width-m.right}" y1="${m.top+plotH}" y2="${m.top+plotH}" class="graph-axis"/>${paths.join('')}${xLabels}</svg></div><div class="graph-note">Масштаб: ${scopeText}. Минимум по видимым точкам ${fmt(rawMin,graphUnit)}, максимум ${fmt(rawMax,graphUnit)}. Строка «МИН» и цены «от» не строятся. Текстовая пометка означает отсутствие сопоставимой числовой ставки, а не ноль.</div>`;
 }
@@ -271,16 +287,17 @@ async function compare(){
 }
 function renderJob(job){
   state.lastJob=job;
+  if($('routeStopButton')){$('routeStopButton').hidden=!['queued','running'].includes(job.status);$('routeStopButton').disabled=!!job.stop_requested;$('routeStopButton').textContent=job.stop_requested?'Сохраняю текущие ответы…':'Остановить загрузку';}
   const results=job.results||[];
   const retry=$('retryFailedButton');
   retry.hidden=!results.some(r=>!r.ok)||['running','queued'].includes(job.status);
   syncRetryButtons();
   const total=(job.requested_companies||[]).length;
   const done=Number(job.completed_companies??results.length);
-  $('liveAuditTitle').textContent=`${job.origin} → ${job.destination}: ${job.status==='done'?'проверка завершена':job.status==='error'?'ошибка проверки':'загрузка'} · ${done}/${total} компаний`;
+  $('liveAuditTitle').textContent=`${job.origin} → ${job.destination}: ${job.status==='done'?'проверка завершена':job.status==='error'?'ошибка проверки':job.status==='paused'?'остановлено':'загрузка'} · ${done}/${total} компаний`;
   $('liveAuditText').textContent=job.status==='done'
     ?`Обновлено: ${job.success_count||0}. Ошибок: ${job.failed_count||0}. Нет опубликованного прайса маршрута: ${job.unavailable_count||0}. Неполных таблиц: ${job.partial_count||0}. Прайсы и открытые API заполняют доступные веса; остальные калькуляторы — выбранный вес. Подробности по каждой компании ниже.`
-    :'Полученные прайсы появляются сразу. Можно закрыть страницу и вернуться — загрузка продолжится на сервере.';
+    :job.stop_requested||job.status==='paused'?job.message:'Полученные прайсы появляются сразу. Можно закрыть страницу и вернуться — загрузка продолжится на сервере.';
   $('companyProgress').innerHTML=(job.requested_companies||[]).map(c=>{
     const result=results.find(x=>x.company===c);
     return `<div class="company-progress-row"><strong>${escapeHtml(c)}</strong><span>${result?(result.ok?`Получено диапазонов: ${result.rows}`:(result.error_info?.summary||'Ошибка загрузки')):'Ожидание ответа'}</span>${result&&!result.ok?errorBlock(result.error_info,result.message):''}</div>`;
@@ -359,7 +376,8 @@ function bulkControls(){
   $('bulkPauseButton').hidden=!active;$('bulkPauseButton').disabled=job.status==='pausing'||bulkState.requesting;
   $('bulkResumeButton').hidden=!['paused','error'].includes(job.status);$('bulkResumeButton').disabled=exporting||bulkState.requesting;
   $('bulkRetryButton').hidden=active||!(job.outcomes?.failed||job.outcomes?.partial);$('bulkRetryButton').disabled=exporting||bulkState.requesting;
-  $('bulkExportButton').hidden=active||!job.completed_checks;$('bulkExportButton').disabled=exporting||bulkState.requesting;
+  $('bulkExportButton').hidden=active||!job.job_id||(!job.export_outdated&&!['paused','error'].includes(job.status)&&job.export_status!=='error');$('bulkExportButton').disabled=exporting||bulkState.requesting;
+  if($('bulkExtraActions'))$('bulkExtraActions').hidden=$('bulkRetryButton').hidden&&$('bulkExportButton').hidden;
   $('collectButton').disabled=active||state.refreshLocked;
   if(active)$('collectButton').textContent='Идёт общий сбор';else if(!state.refreshLocked)$('collectButton').textContent='Обновить прайсы';
 }
@@ -379,11 +397,11 @@ async function updateBulkPlan(){
 function renderBulk(job){
   bulkState.job=job;bulkControls();if(typeof renderCoverage==='function')renderCoverage(job);
   if(job.status==='idle')return;
-  const labels={queued:'В очереди',running:'Идёт сбор',pausing:'Завершаю текущий маршрут перед паузой',paused:'Пауза',done:'Проверки завершены',error:'Сбор прерван'};
+  const labels={queued:'В очереди',running:'Идёт сбор',pausing:'Сохраняю ответы перед остановкой',paused:'Пауза',done:'Проверки завершены',error:'Сбор прерван'};
   const current=job.current?` Сейчас: ${job.current.origin} → ${job.current.destination}.`:'';
   const outcomes=job.outcomes||{};
-  const exportText=job.export_outdated?' Прайс-листы изменились. Пересоберите Excel с прайсами.':job.export_status==='running'?' Создаётся Excel…':job.export_status==='ready'?' Excel готов.':job.export_status==='error'?' Не удалось создать Excel. Можно повторить выгрузку.':'';
-  $('bulkStatus').textContent=`${job.mode==='saved'?'Сбор из текущих данных и прайсов':(labels[job.status]||job.status)}. Маршрутов: ${job.completed_routes}/${job.total_routes}. Проверок компаний: ${job.completed_checks}/${job.total_checks}. Полная сетка: ${outcomes.complete||0}; неполные: ${outcomes.partial||0}; ошибки: ${outcomes.failed||0}; без публичного тарифа: ${outcomes.unavailable||0}. ${outcomes.saved?'Обработано из текущих данных: '+outcomes.saved+'. ':''}${current}${exportText} ${job.message||''}`;
+  const exportText=job.export_outdated?' Данные изменились. Пересоберите Excel.':job.export_status==='running'?' Создаётся Excel…':job.export_status==='ready'?' Excel готов.':job.export_status==='error'?' Не удалось создать Excel. Можно повторить выгрузку.':'';
+  $('bulkStatus').textContent=`${({reference:'Основные · 254',extended_reference:'Эталон · 318',all:'Все пары городов',origins:'Выбранные города'})[job.scope]||'Текущий отчёт'}. ${job.mode==='saved'?'Сбор из текущих данных и прайсов':(labels[job.status]||job.status)}. Маршрутов: ${job.completed_routes}/${job.total_routes}. Проверок компаний: ${job.completed_checks}/${job.total_checks}. Полная сетка: ${outcomes.complete||0}; неполные: ${outcomes.partial||0}; ошибки: ${outcomes.failed||0}; без публичного тарифа: ${outcomes.unavailable||0}. ${outcomes.saved?'Обработано из текущих данных: '+outcomes.saved+'. ':''}${current}${exportText} ${job.message||''}`;
   $('bulkProgress').hidden=false;$('bulkProgress').value=job.percent||0;
   const download=$('bulkDownload');download.hidden=!job.download_url;
   if(job.download_url){download.href=job.download_url;download.textContent=job.total_routes>400?'Скачать Excel-файлы в ZIP':'Скачать большую таблицу';}
@@ -400,12 +418,12 @@ async function monitorBulk(id){
       try{job=await getJSON('/api/bulk/'+encodeURIComponent(id));errors=0;}
       catch(e){if(++errors>=5)throw e;$('bulkStatus').textContent='Связь с приложением прервана. Повторяю запрос состояния…';await new Promise(r=>setTimeout(r,3000));continue;}
       renderBulk(job);
-      if(job.completed_routes!==revision){revision=job.completed_routes;await compare();}
+      if(job.completed_checks!==revision){revision=job.completed_checks;await compare();}
       if(!['queued','running','pausing'].includes(job.status)&&job.export_status!=='running')break;
       await new Promise(r=>setTimeout(r,2500));
     }
   }catch(e){$('bulkStatus').textContent=`Не удалось прочитать состояние: ${e.message}. Сбор продолжится, если приложение запущено. Обновите страницу для подключения.`;}
-  finally{bulkState.monitoring=false;}
+  finally{bulkState.monitoring=false;if(typeof loadBulkHistory==='function')loadBulkHistory();}
 }
 async function bulkAction(action){
   if(bulkState.requesting)return;
@@ -617,7 +635,7 @@ async function changeRoute(origin,destination){
 }
 if($('swapRouteButton')) $('swapRouteButton').addEventListener('click',()=>changeRoute($('destinationSelect').value,$('originSelect').value));
 $('originSelect').addEventListener('change',()=>changeRoute($('originSelect').value,$('destinationSelect').value));
-$('destinationSelect').addEventListener('change',()=>changeRoute($('originSelect').value,$('destinationSelect').value)); $('profileSelect').addEventListener('change',()=>{ const p=(state.options?.profiles||[]).find(x=>x.id===$('profileSelect').value); if(state.graphScope!=='all' && p && !p.is_minimum_profile){ state.graphScope=Number(p.weight_kg||0)<=50?'small':Number(p.weight_kg||0)<=1500?'medium':'heavy'; $('graphScopeSelect').value=state.graphScope; } compare(); });
+$('destinationSelect').addEventListener('change',()=>changeRoute($('originSelect').value,$('destinationSelect').value)); $('profileSelect').addEventListener('change',()=>{ const p=(state.options?.profiles||[]).find(x=>x.id===$('profileSelect').value); if(state.graphScope!=='custom' && p && !p.is_minimum_profile){ state.graphScope=Number(p.weight_kg||0)<=50?'small':Number(p.weight_kg||0)<=1500?'medium':Number(p.weight_kg||0)<=5000?'heavy':'custom'; $('graphScopeSelect').value=state.graphScope; } compare(); });
 $('graphScopeSelect').addEventListener('change',()=>{ state.graphScope=$('graphScopeSelect').value; if(state.matrix) renderTariffGraph(state.matrix); }); if($('unitModeSelect')) $('unitModeSelect').addEventListener('change',()=>{ state.unitMode=$('unitModeSelect').value==='per_kg'?'per_kg':'total'; localStorage.setItem('tariff-unit-mode-v50',state.unitMode); rerenderUnitMode(); }); if($('liveModeSelect')) $('liveModeSelect').addEventListener('change',()=>{ state.liveOnly=$('liveModeSelect').value!=='all'; state.includeImports=$('liveModeSelect').value!=='live'; localStorage.setItem('tariff-source-mode-v450',$('liveModeSelect').value); if(state.comparison) renderComparison(state.comparison); if(state.matrix){renderMatrix(state.matrix);renderTariffGraph(state.matrix);} }); $('compareButton').addEventListener('click',compare);
 $('selectAllCompaniesButton').addEventListener('click',()=>setAllCompanies(true)); $('clearCompaniesButton').addEventListener('click',()=>setAllCompanies(false));
 $('retryFailedButton').addEventListener('click',()=>{const failed=(state.comparison?.items||[]).filter(r=>['failed','partial'].includes(r.refresh_status)&&state.calculationCompanies.has(r.company)).map(r=>r.company);if(failed.length)refreshRouteSources(true,failed);});
@@ -625,6 +643,7 @@ $('diagnosticsButton').addEventListener('click',()=>{window.location.href='/api/
 
 ['bulkScope','bulkOrigins','bulkDestinations'].forEach(id=>$(id).addEventListener('change',updateBulkPlan));
 [['bulkStartButton','start'],['bulkPauseButton','pause'],['bulkResumeButton','resume'],['bulkRetryButton','retry'],['bulkExportButton','export']].forEach(([id,action])=>$(id).addEventListener('click',()=>bulkAction(action)));
+$('routeStopButton')?.addEventListener('click',async()=>{try{const job=await getJSON('/api/collect/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({origin:state.lastJob.origin,destination:state.lastJob.destination})});renderJob(job);}catch(e){toast(e.message);}});
 $('collectButton').addEventListener('click',updateSources); $('exportButton').addEventListener('click',exportExcel); $('themeButton').addEventListener('click',toggleTheme);
 $('settingsButton').addEventListener('click',openSettings); $('closeSettingsButton').addEventListener('click',closeSettings); $('closeSettingsIcon').addEventListener('click',closeSettings); $('saveSettingsButton').addEventListener('click',saveSettings);
 $('settingsDialog').addEventListener('click',e=>{if(e.target===$('settingsDialog'))closeSettings();});

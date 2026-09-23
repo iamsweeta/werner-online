@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="56.0"
+VERSION="58.0"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
@@ -215,7 +215,7 @@ def _run_collect(key:str,selected:list[str],origin:str,destination:str):
                 job['progress_rows']=sum(int(x.get('rows') or 0) for x in by.values())
                 job['progress_revision']=int(job.get('progress_revision',0))+1
                 job['message']=result.get('message','')
-        results=collect_selected(targets,origin,destination,job.get("profile") or "w100",on_progress=progress)
+        results=collect_selected(targets,origin,destination,job.get("profile") or "w100",on_progress=progress,should_stop=lambda:job.get("stop_requested",False))
         job["results"]=results; job["progress_rows"]=sum(int(x.get("rows") or 0) for x in results)
         success=[x for x in results if x.get("ok")]
         with COLLECT_LOCK:
@@ -230,7 +230,8 @@ def _run_collect(key:str,selected:list[str],origin:str,destination:str):
         if failed:
             job["message"]="Онлайн-проверка завершена. Успешные ответы сохранены, при сбоях оставлен последний подтверждённый прайс. " + " | ".join(x.get("message","") for x in failed)
         else:job["message"]="Онлайн-проверка завершена: доступные live-источники обновлены."
-        job["status"]="done"; job["finished_at"]=_now()
+        job["status"]="paused" if job.get("stop_requested") else "done"; job["finished_at"]=_now()
+        if job.get("stop_requested"):job["message"]="Загрузка остановлена. Полученные цены сохранены; остальные компании не запрашивались."
     except Exception as exc:
         job.update({"status":"error","finished_at":_now(),"message":f"Ошибка обновления: {type(exc).__name__}: {exc}"})
 
@@ -282,6 +283,24 @@ def collect(body:CollectRequest):
     except Exception: pass
     threading.Thread(target=_run_collect,args=(key,selected,origin,destination),daemon=True).start()
     return {"ok":True,"status":"queued","job_id":job_id,"created_at":COLLECT_JOBS[key]["created_at"],"origin":origin,"destination":destination,"requested_companies":len(selected),"message":"Запущена реальная онлайн-проверка источников"}
+
+@app.post('/api/collect/stop')
+def stop_collect(body:CollectRequest):
+    origin,destination=_validate_route(body.origin,body.destination)
+    with COLLECT_LOCK:
+        job=COLLECT_JOBS.get(_route_key(origin,destination))
+        if not job:raise HTTPException(404,'Обновление не найдено')
+        if job.get('status') in {'queued','running'}:
+            job['stop_requested']=True
+            job['message']='Останавливаю новые запросы. Уже отправленные ответы будут сохранены.'
+        return json.loads(json.dumps(job))
+
+@app.get('/api/bulk/history')
+def bulk_history():
+    with BULK.db() as db:
+        rows=db.execute("SELECT id,status,created_at,config FROM jobs ORDER BY created_at DESC,rowid DESC LIMIT 20").fetchall()
+    return {'jobs':[{'job_id':r['id'],'status':r['status'],'created_at':r['created_at'],
+                     'scope':json.loads(r['config'])['scope'],'mode':json.loads(r['config']).get('mode','online')} for r in rows]}
 
 @app.get("/api/collect-status")
 def collect_status(origin:str,destination:str):

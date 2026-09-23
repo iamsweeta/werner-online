@@ -34,6 +34,30 @@ def parsing_session():
     finally:_SESSION.reset(token)
 
 
+def pdf_has_text_fonts(page):
+    """Avoid interpreting thousands of outlined paths just to discover no text.
+
+    Unknown/malformed resources deliberately fall back to normal extraction.
+    """
+    def resolve(v):return v.get_object() if hasattr(v,'get_object') else v
+    def inspect(resources,seen,depth):
+        resources=resolve(resources)
+        if resources is None:return False
+        if depth>12 or id(resources) in seen:return True
+        seen=seen|{id(resources)}
+        if resolve(resources.get('/Font')):return True
+        objects=resolve(resources.get('/XObject')) or {}
+        for reference in objects.values():
+            obj=resolve(reference)
+            if obj.get('/Subtype')=='/Image':continue
+            if obj.get('/Subtype')!='/Form':return True
+            nested=obj.get('/Resources')
+            if nested is not None and inspect(nested,seen,depth+1):return True
+        return False
+    try:return inspect(page.get('/Resources'),set(),0)
+    except Exception:return True
+
+
 def pdf_reader(raw):
     from pypdf import PdfReader
     cache=_SESSION.get();key=('pdf',raw)
@@ -41,7 +65,7 @@ def pdf_reader(raw):
     reader=PdfReader(io.BytesIO(raw))
     if cache is not None:
         for page in reader.pages:
-            original=page.extract_text;texts={}
+            original=page.extract_text if pdf_has_text_fonts(page) else (lambda *a,**kw:'');texts={}
             def extract(*args,_fn=original,_texts=texts,**kwargs):
                 k=repr((args,kwargs))
                 if k not in _texts:_texts[k]=_fn(*args,**kwargs)

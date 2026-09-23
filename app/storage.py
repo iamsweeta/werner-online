@@ -10,6 +10,8 @@ from . import v42_engine as e
 
 
 def cleanup_previews():
+    from . import ocr_cache
+    ocr_cache.cleanup()
     from .route_import_jobs import cleanup
     cleanup()
     from .price_library import JOBS, LOCK
@@ -28,7 +30,7 @@ def summary():
     return {'location':str(root.resolve()),'files':len(files),'bytes':sum(p.stat().st_size for p in files),
             'confirmed_retention':'Бессрочно на сервере приложения (при локальном запуске — на вашем компьютере). Автоматического удаления подтверждённых прайсов нет.',
             'disabled_retention':'Отключённый прайс не участвует в расчётах, но оригинал остаётся на диске.',
-            'preview_retention_minutes':30,'online_freshness_minutes':30,
+            'ocr_cache_retention_days':7,'ocr_cache_max_bytes':32*1024*1024,'preview_retention_minutes':30,'online_freshness_minutes':30,
             'online_retention':'Последние успешные онлайн-цены хранятся без срока удаления; после 30 минут теряют только отметку LIVE.',
             'data_directory':str(e.RUNTIME_DIR.resolve()),
             'backup_note':'Архив содержит оригиналы, распознанные цены и историю отключений. API-ключи и временные предпросмотры не включаются.'}

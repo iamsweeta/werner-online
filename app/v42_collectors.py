@@ -1300,14 +1300,15 @@ def _collect_document_batch(companies:list[str], origin:str, destination:str, on
     return output
 
 
-def collect_selected(companies:list[str], origin:str, destination:str, profile_id:str="w100", on_progress=None, *, full_grid=False) -> list[dict[str,Any]]:
+def collect_selected(companies:list[str], origin:str, destination:str, profile_id:str="w100", on_progress=None, *, full_grid=False, should_stop=None) -> list[dict[str,Any]]:
     """Independent carrier jobs, with immediate per-company results."""
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
     from . import online_tariffs
     if profile_id not in PROFILE_BY_ID:
         raise ValueError('Неизвестный весовой профиль')
     companies=list(dict.fromkeys(companies))
-    attempts={c:begin_live_attempt(c,origin,destination,profile_id) for c in companies}
+    attempts={}
+    should_stop=should_stop or (lambda:False)
     results={}
     docs=[c for c in companies if c=='ПЭК' or (c=='КИТ' and normalize_city(origin) in {'Москва','Санкт-Петербург'})]
 
@@ -1334,6 +1335,7 @@ def collect_selected(companies:list[str], origin:str, destination:str, profile_i
         return result
 
     def document_job():
+        for c in docs:attempts[c]=begin_live_attempt(c,origin,destination,profile_id)
         output={}
         def ready(company):
             try:
@@ -1349,6 +1351,7 @@ def collect_selected(companies:list[str], origin:str, destination:str, profile_i
         return list(output.values())
 
     def network_job(c):
+        attempts[c]=begin_live_attempt(c,origin,destination,profile_id)
         try:
             if c in online_tariffs.ADAPTERS:
                 if full_grid and c=='Пролайн' and {normalize_city(origin),normalize_city(destination)}!={'Москва','Санкт-Петербург'}:
@@ -1395,14 +1398,24 @@ def collect_selected(companies:list[str], origin:str, destination:str, profile_i
         except Exception as exc:return finish(c,error=str(exc))
 
     from contextvars import copy_context
+    # Submit only as slots become available. A pause stops scheduling; already
+    # running requests finish and persist their results before the job pauses.
+    tasks=iter([(network_job,c) for c in companies if c not in docs]+([(document_job,None)] if docs else []))
     with ThreadPoolExecutor(max_workers=7) as pool:
-        futures={pool.submit(copy_context().run,network_job,c):c for c in companies if c not in docs}
-        if docs:futures[pool.submit(copy_context().run,document_job)]=None
-        for future in as_completed(futures):
-            c=futures[future]
-            try:
-                output=future.result()
-                for result in output if c is None else [output]:results[result['company']]=result
-            except Exception as exc:
-                for target in docs if c is None else [c]:results[target]=finish(target,error=str(exc))
-    return [results[c] for c in companies]
+        futures={};exhausted=False
+        while futures or not exhausted:
+            while len(futures)<7 and not exhausted and not should_stop():
+                task=next(tasks,None)
+                if task is None:exhausted=True;break
+                fn,c=task
+                futures[pool.submit(copy_context().run,fn,*(() if c is None else (c,)))]=c
+            if not futures:break
+            done,_=wait(futures,return_when=FIRST_COMPLETED)
+            for future in done:
+                c=futures.pop(future)
+                try:
+                    output=future.result()
+                    for result in output if c is None else [output]:results[result['company']]=result
+                except Exception as exc:
+                    for target in docs if c is None else [c]:results[target]=finish(target,error=str(exc))
+    return [results[c] for c in companies if c in results]

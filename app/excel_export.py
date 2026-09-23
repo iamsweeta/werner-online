@@ -174,9 +174,9 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
         for label,value in [
             ('Отчёт','Все компании и маршруты'),('Начало проверки',collection_info['created_at']),
             ('Последний ответ',collection_info['updated_at']),('Создан Excel',datetime.now().astimezone().isoformat(timespec='seconds')),
-            ('Маршрутов в плане',collection_info['total_routes']),('Маршрутов проверено',collection_info['completed_routes']),
+            ('Маршрутов в плане',collection_info['total_routes']),('Маршрутов обработано в задании' if collection_info.get('mode')=='saved' else 'Маршрутов проверено в задании',collection_info['completed_routes']),
             ('Маршрутов в этом файле',len(routes)),('Проверок компаний в плане',collection_info['total_checks']),
-            ('Проверок выполнено',collection_info['completed_checks']),('Часть',f"{collection_info.get('part',1)} из {collection_info.get('parts',1)}"),
+            ('Компаний обработано без сетевого запроса' if collection_info.get('mode')=='saved' else 'Проверок выполнено',collection_info['completed_checks']),('Часть',f"{collection_info.get('part',1)} из {collection_info.get('parts',1)}"),
             ('Режим','Текущие данные + прайс-листы' if collection_info.get('mode')=='saved' else 'Обновление онлайн + прайс-листы' if collection_info.get('include_imports') else 'Обновление только онлайн'),
             ('Числовых ячеек из онлайн-ответов',counts['online']),('Числовых ячеек из файлов',counts['document']),
             ('Числовых ячеек из прежних сохранённых цен',counts['saved']),

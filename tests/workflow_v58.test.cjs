@@ -1,0 +1,28 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {JSDOM}=require('jsdom');const root=path.resolve(__dirname,'..');
+const dom=new JSDOM(fs.readFileSync(path.join(root,'static/index.html'),'utf8'),{url:'http://localhost:8423',runScripts:'outside-only'});
+const w=dom.window,$=id=>w.document.getElementById(id);w.AbortController=AbortController;
+w.eval(['workspace.js','app.js'].map(n=>fs.readFileSync(path.join(root,'static',n),'utf8')).join('\n').replace('init().catch(e=>toast(e.message));','')+'\nwindow.testingState=state;');
+const s=w.testingState,weights=[1,50,100,1500,2000,5000,10000,20000];
+s.options={companies:[{id:'ДЛ',label:'ДЛ'}],profiles:weights.map(n=>({id:'w'+n,weight_kg:n,range_weight:n+' кг'}))};s.calculationCompanies.add('ДЛ');
+s.matrix={profiles:s.options.profiles.map(p=>({profile:p,items:[{company:'ДЛ',price:p.weight_kg<=50?700:p.weight_kg*10,comparison_value:p.weight_kg<=50?700:p.weight_kg*10,status:'ok'}]}))};
+s.graphScope='custom';w.renderTariffGraph(s.matrix);assert.equal($('heavyRangeControls').hidden,false);
+let titles=()=>[...$('rateChart').querySelectorAll('circle title')].map(n=>n.textContent);
+assert.equal(titles().length,6);assert.ok(titles().some(t=>t.includes('20000 кг')));assert.ok(!titles().some(t=>t.includes('· 50 кг')));
+$('heavyRangeFrom').value=13;$('heavyRangeTo').value=16;$('heavyRangeFrom').dispatchEvent(new w.Event('input'));
+assert.equal(titles().length,2);assert.match($('heavyRangeLabel').textContent,/2\s000–5\s000 кг/);
+$('heavyRangeFrom').value=18;$('heavyRangeFrom').dispatchEvent(new w.Event('input'));
+assert.equal($('heavyRangeTo').value,'18');assert.equal(titles().length,1);assert.equal($('heavyRangeFrom').getAttribute('aria-valuetext'),'20000 кг');
+s.graphScope='small';s.unitMode='per_kg';w.renderTariffGraph(s.matrix);
+assert.equal($('heavyRangeControls').hidden,true);assert.equal(titles().length,2);assert.ok(titles().every(t=>t.includes('700 ₽')&&!t.includes('₽/кг')));
+assert.equal($('compareButton').hidden,true);assert.equal(w.document.querySelector('.company-panel').open,false);
+assert.ok($('documentTemplateButton').closest('details'));assert.ok($('diagnosticsButton').closest('details'));
+let posts=[];w.fetch=async(url,request={})=>{posts.push({url,request});return {ok:true,json:async()=>({status:'running',origin:'Москва',destination:'Санкт-Петербург',stop_requested:true,message:'Останавливаю'})};};
+w.renderJob({status:'running',origin:'Москва',destination:'Санкт-Петербург',requested_companies:['ДЛ']});assert.equal($('routeStopButton').hidden,false);
+$('routeStopButton').click();
+setTimeout(()=>{
+ assert.equal(posts[0].url,'/api/collect/stop');assert.equal(JSON.parse(posts[0].request.body).origin,'Москва');assert.equal($('routeStopButton').disabled,true);
+ w.renderJob({status:'paused',origin:'Москва',destination:'Санкт-Петербург',message:'Результаты сохранены'});assert.equal($('routeStopButton').hidden,true);
+ assert.match($('liveAuditTitle').textContent,/остановлено/);
+ dom.window.close();console.log('PASS: 100–20000 kg window, bound clamp, fixed-charge small graph, hidden secondary tools and route stop');
+},20);

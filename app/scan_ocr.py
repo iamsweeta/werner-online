@@ -8,7 +8,7 @@ _PROGRESS=ContextVar('scan_ocr_progress',default=None)
 _SLOTS=threading.BoundedSemaphore(2)
 TIMEOUT=600
 STAGE_TIMEOUT=120
-WARNING='Цены прочитаны со скана (OCR). Два чтения чисел сверены, но ошибки распознавания всё равно возможны. Проверьте маршрут, дату и цены по страницам оригинала перед подтверждением.'
+WARNING='Цены прочитаны со скана (OCR). Числа проверены повторным OCR или сравнением контуров с проверенными образцами этого документа. Ошибки распознавания всё равно возможны. Проверьте маршрут, дату и цены по страницам оригинала перед подтверждением.'
 
 
 def needed(raw):
@@ -26,6 +26,12 @@ def prepare(raw,company,origin=None,destination=None):
     if destination:key=(*key,origin,destination)
     if cache is not None and key in cache:return cache[key]
     if company!='ДЛ':raise ValueError('В PDF нет текстового слоя. OCR поддерживает скан первой межтерминальной таблицы ДЛ. Для другого макета используйте текстовый PDF или XLSX-шаблон.')
+    from . import ocr_cache
+    saved=ocr_cache.get(raw,company,origin,destination)
+    if saved is not None:
+        if _PROGRESS.get():_PROGRESS.get()({'done':0,'total':0,'message':'Использую проверенное распознавание этого же файла'})
+        if cache is not None:cache[key]=saved
+        return saved
     base=Path(__file__).resolve().parent.parent
     if not all((base/'data/ocr'/f'{lang}.traineddata').is_file() for lang in ('rus','eng')):raise ValueError('Не найдены модели OCR. Распакуйте весь архив приложения, включая data/ocr.')
     try:import pymupdf;from PIL import Image
@@ -59,6 +65,7 @@ def prepare(raw,company,origin=None,destination=None):
             finally:
                 if process.poll() is None:
                     process.kill();process.wait(timeout=5)
+        ocr_cache.put(raw,company,result,origin,destination)
         if cache is not None:cache[key]=result
         return result
     finally:_SLOTS.release()
@@ -79,9 +86,11 @@ def parse(result,origin,destination):
     if not row:
         error=next((e['message'] for e in result['errors'] if e.get('destination')==destination),None)
         raise ValueError(error or f'В скане ДЛ не найдена однозначная строка {origin} → {destination}')
+    vector=any(c.get('method')=='vector_shape' for c in row.get('ocr_cells',[]))
     nums=row['numbers']
     values=values_from_tiers([(*b,v) for b,v in zip(KG_BOUNDS,nums[6:])],fixed=[(*b,v) for b,v in zip(FIXED_BOUNDS,nums[:5])],minimum=nums[5])
     return values,{'parser':'ДЛ · скан межтерминальной таблицы · OCR','source_page':row['source_page'],
                   'document_date':result.get('document_date'),'tax_basis':result.get('tax_basis'),
+                  'ocr_cache_hit':bool(result.get('ocr_cache_hit')),'ocr_vector_verified':vector,
                   'route_verified':True,'ocr':True,'ocr_pages':result['ocr_pages'],'ocr_cells':row['ocr_cells'],
-                  'calculation_basis':'OCR: два чтения чисел совпали; требуется проверка по оригиналу. ДЛ: фиксированные суммы до 35 кг (объём до 0,1 м³), далее max(минимум, вес × руб/кг). До 10 000 кг, без адресной доставки и допуслуг.'}
+                  'calculation_basis':('Контуры цифр сопоставлены с образцами, дважды прочитанными OCR в этом документе; на каждой странице проверена контрольная строка. ' if vector else 'OCR: два чтения чисел совпали; требуется проверка по оригиналу. ')+ 'ДЛ: фиксированные суммы до 35 кг (объём до 0,1 м³), далее max(минимум, вес × руб/кг). До 10 000 кг, без адресной доставки и допуслуг.'}

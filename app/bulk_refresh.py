@@ -2,7 +2,7 @@
 
 SQLite checkpoints after each carrier. Closing the browser does not interrupt
 the worker. A server restart pauses the job; resume retries only unfinished
-carriers. Exports combine this job's evidence with confirmed documents for missing cells.
+carriers. Exports read the shared last-known prices and confirmed documents.
 """
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def capture_company(company, origin, destination, result):
     packs=({},clean,{})
     items=[e._route_quote(company,origin,destination,p['id'],packs) for p in e.COMMON_PROFILES]
     for item in items:
-        item['collected_online']=bool(item.get('online'))
+        item['collected_online']=bool(item.get('online') and not result.get('snapshot'))
         item['checked_at']=meta.get('last_finished_at') or now()
     exact=sum(tariff_value(i,e.PROFILE_BY_ID[i['profile_id']]) is not None for i in items if i['profile_id']!='min')
     confirmed=sum(i.get('collected_online') and tariff_value(i,e.PROFILE_BY_ID[i['profile_id']]) is not None for i in items if i['profile_id']!='min')
@@ -171,7 +171,7 @@ class BulkManager:
             last=db.execute('SELECT idx,company,status,payload FROM results WHERE job=? ORDER BY rowid DESC LIMIT 18',(ident,)).fetchall()
         config=json.loads(job['config'])
         from .document_imports import revision
-        outdated=bool(config.get('include_imports',True) and job['export_status']=='ready' and config.get('export_document_revision')!=revision())
+        outdated=bool(job['export_status']=='ready' and (config.get('export_schema')!=58 or config.get('export_price_revision')!=e.price_revision() or (config.get('include_imports',True) and config.get('export_document_revision')!=revision())))
         job.pop('config');job.pop('export_file')
         total=sum(counts.values());done=counts.get('done',0)
         job.update({'job_id':ident,'scope':config['scope'],'companies':config['companies'],
@@ -210,7 +210,7 @@ class BulkManager:
     def pause(self,ident):
         with self.guard,self.db() as db:
             self._job(ident)
-            db.execute("UPDATE jobs SET status='pausing',message='Пауза после текущего маршрута',updated_at=? WHERE id=? AND status IN ('queued','running')",(now(),ident))
+            db.execute("UPDATE jobs SET status='pausing',message='Останавливаю новые запросы. Текущие ответы будут сохранены.',updated_at=? WHERE id=? AND status IN ('queued','running')",(now(),ident))
         return self.status(ident)
 
     def resume(self,ident,retry=False):
@@ -250,6 +250,7 @@ class BulkManager:
             while True:
                 if self._job(ident)['status']=='pausing':
                     with self.db() as db:
+                        db.execute("UPDATE routes SET state='pending' WHERE job=? AND state='running'",(ident,))
                         db.execute("UPDATE jobs SET status='paused',message='Сбор приостановлен. Результаты сохранены.',updated_at=? WHERE id=?",(now(),ident))
                     return
                 with self.db() as db:
@@ -269,14 +270,20 @@ class BulkManager:
                     if config.get('mode')=='saved':
                         results=[]
                         for company in selected:
+                            if self._job(ident)['status']=='pausing':break
                             meta=e.live_company_state(o,d,company)
                             result={'company':company,'ok':meta.get('attempt_status') in {'success','partial'},
                                     'snapshot':True,
                                     'message':meta.get('last_error') or 'Отчёт из текущих данных и подтверждённых документов'}
                             progress(result);results.append(result)
-                    else:results=collector(selected,o,d,'w100',on_progress=progress,full_grid=True)
+                    else:
+                        import inspect
+                        stop={'should_stop':lambda:self._job(ident)['status']=='pausing'} if 'should_stop' in inspect.signature(collector).parameters else {}
+                        results=collector(selected,o,d,'w100',on_progress=progress,full_grid=True,**stop)
                     for result in results:progress(result)
-                    if seen!=set(selected):raise RuntimeError('Загрузчик не вернул результат для всех компаний')
+                    if seen!=set(selected):
+                        if self._job(ident)['status']=='pausing':continue
+                        raise RuntimeError('Загрузчик не вернул результат для всех компаний')
                 with self.db() as db:
                     db.execute("UPDATE routes SET state='done' WHERE job=? AND idx=?",(ident,idx))
                 # Bound route-to-route request pressure; carrier jobs have their
@@ -290,10 +297,27 @@ class BulkManager:
             with self.db() as db:
                 db.execute("UPDATE jobs SET status='error',export_status='idle',message=?,updated_at=? WHERE id=?",(str(exc)[:1500],now(),ident))
 
-    def _route_rows(self,ident,idx,o,d,imports=None):
+    def _route_rows(self,ident,idx,o,d,imports=None,*,current=False):
         with self.db() as db:
             stored={r['company']:json.loads(zlib.decompress(r['payload'])) for r in db.execute('SELECT company,payload FROM results WHERE job=? AND idx=?',(ident,idx))}
         by={c:{i['profile_id']:i for i in row['items']} for c,row in stored.items()}
+        if current:
+            # Every screen and every new export uses the same persistent prices.
+            # A job's evidence remains immutable for diagnostics, not as a filter
+            # that hides prices collected in another run or in One Route.
+            with e.STATE_LOCK:live=e._live_pack(o,d)
+            output=[]
+            for p in e.COMMON_PROFILES:
+                items=[]
+                for company in e.COMPANIES:
+                    item=e._route_quote(company,o,d,p['id'],({},live,imports or {}))
+                    prior=by.get(company,{}).get(p['id'],{})
+                    item['collected_online']=bool(not item.get('uploaded') and prior.get('collected_online') and item.get('captured_at')==prior.get('captured_at') and item.get('price')==prior.get('price'))
+                    item['checked_at']=item.get('captured_at')
+                    item['bulk_status']='document' if item.get('uploaded') else 'saved'
+                    items.append(item)
+                output.append({'profile':deepcopy(p),'items':items})
+            return output
         output=[]
         for p in e.COMMON_PROFILES:
             items=[]
@@ -330,8 +354,6 @@ class BulkManager:
             if job['status'] in ACTIVE:raise BusyError('Сначала дождитесь окончания сбора или нажмите «Пауза»')
             if self.export_worker and self.export_worker.is_alive():raise BusyError('Excel уже создаётся')
             with self.db() as db:
-                count=db.execute('SELECT COUNT(*) FROM results WHERE job=?',(ident,)).fetchone()[0]
-                if not count:raise ValueError('Ещё нет результатов для выгрузки')
                 db.execute("UPDATE jobs SET export_status='running',export_file=NULL WHERE id=?",(ident,))
             self.export_worker=threading.Thread(target=self._export,args=(ident,),daemon=True,name='tariffs-excel')
             self.export_worker.start()
@@ -346,13 +368,9 @@ class BulkManager:
             config=json.loads(self._job(ident)['config'])
             from .document_imports import revision
             document_revision=revision()
-            # A partial export contains attempted routes only; the manifest
-            # lists all planned pairs and explicitly marks those not checked.
-            if job['status']!='done':
-                with self.db() as db:attempted={r[0] for r in db.execute('SELECT DISTINCT idx FROM results WHERE job=?',(ident,))}
-                routes=[r for r in all_routes if r['idx'] in attempted]
-            else:routes=all_routes
-            if not routes:raise ValueError('Нет проверенных маршрутов для Excel')
+            price_revision=e.price_revision()
+            # Preserve the full selected structure, even when collection is paused.
+            routes=all_routes
             part_size=len(routes) if len(routes)<=SINGLE_WORKBOOK_LIMIT else PART_SIZE
             parts=[routes[i:i+part_size] for i in range(0,len(routes),part_size)]
             target=self.directory/ident;target.mkdir(exist_ok=True)
@@ -368,7 +386,7 @@ class BulkManager:
                 with e.STATE_LOCK:
                     documents={route:imported_pack(*route) for route in index} if info['include_imports'] else {}
                 def matrix_for(o,d):
-                    rows=self._route_rows(ident,index[(o,d)],o,d,documents.get((o,d)))
+                    rows=self._route_rows(ident,index[(o,d)],o,d,documents.get((o,d)),current=True)
                     for row in rows:
                         if row['profile']['id']=='min':continue
                         for item in row['items']:
@@ -393,10 +411,12 @@ class BulkManager:
                     for file in files:out.write(file,file.name)
                     out.writestr('routes.csv',manifest.getvalue().encode('utf-8-sig'))
                     out.writestr('collection.json',json.dumps(info,ensure_ascii=False,indent=2).encode())
-                    out.writestr('README.txt','Онлайн-данные на время проверки; пропуски дополнены подтверждёнными прайсами, если включены документы. Даты и источники — на листе Источники. Для обновления запустите новый общий сбор в приложении. Маршруты перечислены в routes.csv.'.encode('utf-8'))
+                    out.writestr('README.txt','Последние сохранённые онлайн-данные всех сборов и подтверждённые прайсы, если включены документы. Даты и источники — на листе Источники. Для обновления запустите новый общий сбор в приложении. Маршруты перечислены в routes.csv.'.encode('utf-8'))
                 temp.replace(output)
             with self.db() as db:
                 config['export_document_revision']=document_revision
+                config['export_price_revision']=price_revision
+                config['export_schema']=58
                 config['coverage']=list(coverage.values())
                 db.execute("UPDATE jobs SET export_status='ready',export_file=?,config=?,message='Excel готов. Даты проверки указаны в файле.' WHERE id=?",(str(output.resolve()),json.dumps(config,ensure_ascii=False),ident))
         except Exception as exc:
@@ -405,7 +425,7 @@ class BulkManager:
 
     def download(self,ident):
         job=self._job(ident)
-        if self.status(ident).get('export_outdated'):raise ValueError('Прайс-листы изменились. Пересоберите Excel, чтобы включить актуальные файлы.')
+        if self.status(ident).get('export_outdated'):raise ValueError('Данные изменились. Пересоберите Excel, чтобы включить последние сохранённые цены.')
         if job['export_status']!='ready' or not job['export_file']:raise ValueError('Excel ещё не готов')
         file=Path(job['export_file']).resolve()
         if not file.is_relative_to(self.directory.resolve()) or not file.is_file():raise ValueError('Файл выгрузки не найден')

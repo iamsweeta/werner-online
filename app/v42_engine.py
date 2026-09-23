@@ -150,6 +150,9 @@ def _live_pack(origin: str, destination: str) -> dict[str, Any]:
 def _write_live(origin: str, destination: str, live: dict[str, Any]) -> None:
     _robust_json_write(_route_cfg(origin,destination)['live'], live)
 
+def price_revision() -> str:
+    return _read_json(RUNTIME_DIR/'prices_revision.json',{}).get('revision','0')
+
 def live_path_for(origin: str, destination: str) -> Path:
     return _route_cfg(origin,destination)["live"]
 
@@ -213,6 +216,7 @@ def save_live_update(company: str, origin: str, destination: str, profile_values
         company_meta.update({k:v for k,v in meta.items() if v is not None})
         company_meta.update({"current_attempt_id":aid,"last_success_at":captured_at,"data_origin":"online"})
         _write_live(origin,destination,live)
+        _robust_json_write(RUNTIME_DIR/'prices_revision.json',{'revision':uuid.uuid4().hex,'updated_at':_now()})
 
 def finish_live_attempt(company: str, origin: str, destination: str, attempt_id: str, *, rows: int, error: str | None=None) -> None:
     with STATE_LOCK:

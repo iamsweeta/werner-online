@@ -11,7 +11,7 @@ function setWorkspace(name,{focus=false}={}){
   wsEl('workspaceTitle').textContent=labels[name][0];wsEl('workspaceSubtitle').textContent=labels[name][1];
   if(focus)wsEl('workspaceTitle').focus({preventScroll:true});
   if(name==='documents')refreshDocuments();
-  if(name==='bulk')refreshBulkAfterDocuments();
+  if(name==='bulk'){refreshBulkAfterDocuments();loadBulkHistory();}
   if(name==='route'&&state.options){compare();}
 }
 function updateThemeButton(){
@@ -242,3 +242,15 @@ async function openDocumentRoutes(button){
   finally{button.disabled=false;}
 }
 wsEl('routeLibraryButton')?.addEventListener('click',()=>setWorkspace('documents',{focus:true}));
+
+async function loadBulkHistory(){
+  try{
+    const result=await getJSON('/api/bulk/history');
+    const labels={reference:'Основные · 254',extended_reference:'Эталон · 318',all:'Все пары городов',origins:'Выбранные города'};
+    const statuses={paused:'На паузе',done:'Завершено',error:'Прервано',running:'Идёт загрузка',queued:'В очереди',pausing:'Остановка'};
+    wsEl('bulkHistory').innerHTML=(result.jobs||[]).map(j=>`<div class="history-row"><span><strong>${escapeHtml(labels[j.scope]||j.scope)}</strong> · ${escapeHtml(statuses[j.status]||j.status)}<small>${escapeHtml(new Date(j.created_at).toLocaleString('ru-RU'))} · ${j.mode==='saved'?'Из сохранённых цен':'Онлайн'}</small></span><button class="text-button" type="button" data-history-job="${escapeHtml(j.job_id)}">Открыть</button></div>`).join('')||'<p>Пока нет загрузок.</p>';
+    wsEl('bulkHistory').querySelectorAll('[data-history-job]').forEach(btn=>btn.addEventListener('click',async()=>{
+      try{if(state.bulkActive){toast('Сначала остановите текущую загрузку.');return;}const job=await getJSON('/api/bulk/'+encodeURIComponent(btn.dataset.historyJob));renderBulk(job);wsEl('bulkStatus').scrollIntoView?.({block:'center',behavior:'smooth'});}catch(e){toast(e.message);}
+    }));
+  }catch{if(wsEl('bulkHistory'))wsEl('bulkHistory').textContent='История временно недоступна. Сохранённые цены остаются в расчётах.';}
+}
