@@ -1,10 +1,10 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title TARIFF COMPARISON - CITY ROUTES - BUILD 55.0
+title TARIFF COMPARISON - CITY ROUTES - BUILD 56.0
 
 echo =====================================================
-echo   TARIFF COMPARISON - BUILD 55.0
+echo   TARIFF COMPARISON - BUILD 56.0
 echo   SELECT ORIGIN AND DESTINATION IN THE APP
 echo   A free local port is selected automatically
 echo =====================================================
@@ -29,7 +29,7 @@ echo [2/3] Installing/checking dependencies...
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 if errorlevel 1 goto :fail
 
-echo [3/3] Starting v55.0 on http://127.0.0.1:8423/
+echo [3/3] Starting v56.0 on http://127.0.0.1:8423/
 ".venv\Scripts\python.exe" launch.py
 if errorlevel 1 goto :fail
 exit /b 0

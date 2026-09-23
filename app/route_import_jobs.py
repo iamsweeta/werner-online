@@ -72,6 +72,8 @@ def status(key,folder=None):
             state='expired';message='Предпросмотр истёк. Загрузите файл заново и проверьте цены.'
     return {'job_id':key,'status':state,'company':row['company'],'origin':row['origin'],'destination':row['destination'],
             'filename':row['filename'],'message':message,**{k:v for k,v in data.items() if k!='preview'},
+            'elapsed_seconds':max(0,int(time.time()-row['created'])),
+            'stage_elapsed_seconds':max(0,int(time.time()-data.get('ocr_stage_started',row['created']))),
             **({'preview':data['preview']} if state=='ready' else {})}
 
 
@@ -109,7 +111,7 @@ def _run(folder,key,filename,company,origin,destination):
             except (OSError,sqlite3.Error):pass
     monitor=threading.Thread(target=heartbeat,daemon=True);monitor.start()
     def progress(info):
-        _update(folder,key,message=info['message'],payload={'ocr_page':info['done'],'ocr_total':info['total']})
+        _update(folder,key,message=info['message'],payload={'ocr_page':info['done'],'ocr_total':info['total'],'ocr_stage_started':time.time()})
     context=scan_ocr._PROGRESS.set(progress)
     try:
         _update(folder,key,status='parsing',message='Читаю документ и проверяю выбранное направление…')

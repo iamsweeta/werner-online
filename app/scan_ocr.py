@@ -7,6 +7,7 @@ from pathlib import Path
 _PROGRESS=ContextVar('scan_ocr_progress',default=None)
 _SLOTS=threading.BoundedSemaphore(2)
 TIMEOUT=600
+STAGE_TIMEOUT=120
 WARNING='Цены прочитаны со скана (OCR). Два чтения чисел сверены, но ошибки распознавания всё равно возможны. Проверьте маршрут, дату и цены по страницам оригинала перед подтверждением.'
 
 
@@ -16,9 +17,13 @@ def needed(raw):
     return not any((p.extract_text() or '').strip() for p in pdf_reader(raw).pages[:2])
 
 
-def prepare(raw,company):
+def prepare(raw,company,origin=None,destination=None):
     from .tariff_documents import _SESSION
     cache=_SESSION.get();key=('ocr',raw,company)
+    if cache is not None and key in cache:return cache[key]
+    # A full-library result can serve every route in this parsing session.
+    # A route-only result must never be used as the document's complete index.
+    if destination:key=(*key,origin,destination)
     if cache is not None and key in cache:return cache[key]
     if company!='ДЛ':raise ValueError('В PDF нет текстового слоя. OCR поддерживает скан первой межтерминальной таблицы ДЛ. Для другого макета используйте текстовый PDF или XLSX-шаблон.')
     base=Path(__file__).resolve().parent.parent
@@ -31,16 +36,22 @@ def prepare(raw,company):
             root=Path(directory);source=root/'source.pdf';target=root/'result.json';progress=root/'progress.json';source.write_bytes(raw)
             # Process isolation, hard timeout, no shell, no network or shared PDF state.
             env={**os.environ,'OMP_THREAD_LIMIT':'1','PYTHONUTF8':'1'}
-            process=subprocess.Popen([sys.executable,'-m','app.scan_ocr_worker',str(source),str(target),str(progress)],cwd=base,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-            deadline=time.monotonic()+TIMEOUT;last=None
+            selection={'origin_filter':origin,'destination':destination} if destination else {}
+            process=subprocess.Popen([sys.executable,'-m','app.scan_ocr_worker',str(source),str(target),str(progress),json.dumps(selection,ensure_ascii=False)],cwd=base,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            deadline=time.monotonic()+TIMEOUT;last=None;changed=time.monotonic()
             try:
                 while process.poll() is None:
                     if time.monotonic()>deadline:raise ValueError('OCR занял больше 10 минут. Разделите PDF на части и загрузите их вместе.')
-                    if progress.exists() and _PROGRESS.get():
+                    if progress.exists():
                         try:
                             status=json.loads(progress.read_text(encoding='utf-8'))
-                            if status!=last:_PROGRESS.get()(status);last=status
+                            if status!=last:
+                                changed=time.monotonic();last=status
+                                if _PROGRESS.get():_PROGRESS.get()(status)
                         except (OSError,ValueError):pass
+                    if time.monotonic()-changed>STAGE_TIMEOUT:
+                        stage=(last or {}).get('message','Запуск OCR')
+                        raise ValueError(f'OCR остановлен: этап «{stage}» не завершился за {STAGE_TIMEOUT} секунд. Цены не применены. Попробуйте более чёткий PDF или текстовый PDF/XLSX; если ошибка повторяется, проверьте нагрузку и память сервера.')
                     time.sleep(.15)
                 if process.returncode or not target.exists():raise ValueError('OCR не завершился. Проверьте установку зависимостей и свободную память; попробуйте PDF меньшего размера.')
                 result=json.loads(target.read_text(encoding='utf-8'))

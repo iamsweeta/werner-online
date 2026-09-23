@@ -12,6 +12,7 @@ KG_BOUNDS=[(5000,10000),(3000,4999),(2500,2999),(2000,2499),(1500,1999),
            (150,199),(100,149),(36,99)]
 FIXED_BOUNDS=[(0,1),(2,3),(4,5),(6,15),(16,35)]
 MAX_PIXELS=24000000
+_stage=lambda message:None
 
 
 def center(w):return (w[1]+w[3])/2
@@ -28,8 +29,9 @@ def lines(words,tolerance=2):
 def as_text(words):return '\n'.join(' '.join(w[4] for w in group) for group in lines(words))
 
 
-def ocr(page,clip=None,dpi=300,language='rus',invert=False):
+def ocr(page,clip=None,dpi=300,language='rus',invert=False,stage=None):
     import pymupdf as fitz
+    _stage(stage or ('Читаю числа' if language=='eng' else 'Проверяю заголовки'))
     clip=fitz.Rect(clip or page.rect)&page.rect
     if clip.is_empty:return []
     if clip.width*clip.height*(dpi/72)**2>MAX_PIXELS:raise ValueError('Слишком крупная страница скана. Разделите её на страницы формата A4/A3.')
@@ -82,13 +84,13 @@ def header(page,initial):
     top=max(0,min(w[1] for w in sequence)-gap*1.2)
     bottom=max(w[3] for w in sequence)+gap*.3
     # Re-read the compact header at higher resolution, independently of body prices.
-    kg=ocr(page,(kgleft,top,kgright,bottom),600)
+    kg=ocr(page,(kgleft,top,kgright,bottom),600,stage='Проверяю весовые диапазоны')
     if 'руб/кг' not in re.sub(r'\s+','',as_text(kg)).lower():raise ValueError('OCR: не подтверждена единица руб/кг в заголовке ДЛ')
     for j,(lo,hi) in enumerate(KG_BOUNDS):
         l=kgleft+j*gap;r=kgleft+(j+1)*gap
         text=re.sub(r'\s+','',as_text([w for w in kg if l<(w[0]+w[2])/2<r])).strip("'‘’`")
         if f'{lo}-{hi}' not in text.replace('–','-').replace('—','-'):raise ValueError(f'OCR: проверьте заголовок диапазона {lo}–{hi} кг')
-    left=ocr(page,(0,top,kgleft,bottom),600)
+    left=ocr(page,(0,top,kgleft,bottom),600,stage='Проверяю фиксированные тарифы')
     compact=re.sub(r'\s+','',as_text(left)).lower()
     if 'стоимостьперевозки' not in compact:raise ValueError('OCR: не подтверждён раздел фиксированных сумм ДЛ')
     # Read the five ranges by their actual printed coordinates (not price columns).
@@ -109,9 +111,9 @@ def header(page,initial):
             fixed=[]
     if len(fixed)!=5 or fixed!=sorted(fixed):raise ValueError('OCR: не подтверждены все пять фиксированных диапазонов ДЛ')
     minleft=fixed[-1]+(fixed[-1]-fixed[-2])/2
-    mint=as_text(ocr(page,(minleft,top,kgleft,bottom),600,invert=True))
+    mint=as_text(ocr(page,(minleft,top,kgleft,bottom),600,invert=True,stage='Проверяю столбец минимума'))
     if not re.search(r'\bмин\b',mint,re.I):
-        mint+=' '+as_text(ocr(page,(minleft,top,kgleft,bottom),600))
+        mint+=' '+as_text(ocr(page,(minleft,top,kgleft,bottom),600,stage='Повторно проверяю столбец минимума'))
         if not re.search(r'\bмин\b',mint,re.I):raise ValueError('OCR: не подтверждён столбец минимальной стоимости ДЛ')
     edges=[fixed[0]-(fixed[1]-fixed[0])/2]+[(a+b)/2 for a,b in zip(fixed,fixed[1:])]+[minleft,kgleft]
     edges += [kgleft+j*gap for j in range(1,15)]
@@ -127,6 +129,7 @@ def retry_cells(page,requests,dpi=800,clean=True):
     from PIL import Image
     output={}
     for offset in range(0,len(requests),80):
+        _stage(f'Сверяю спорные ячейки: {offset+1}–{min(offset+80,len(requests))} из {len(requests)} · чтение {3 if clean else 4}')
         batch=requests[offset:offset+80];images=[];height=0;width=600;regions=[]
         for key,rect in batch:
             pix=page.get_pixmap(dpi=dpi,clip=fitz.Rect(rect)&page.rect,alpha=False)
@@ -145,12 +148,15 @@ def retry_cells(page,requests,dpi=800,clean=True):
     return output
 
 
-def page_rows(page,initial,page_number):
+def page_rows(page,initial,page_number,layout=None,band=None,names=None):
     from .cities import normalize_city,city_names
-    edges,body,heading_top=header(page,initial)
-    clip=(edges[0],body,edges[-1],page.rect.height-10)
-    primary=ocr(page,clip,600,'eng');secondary=ocr(page,clip,450,'eng')
-    names=ocr(page,(0,body,edges[0],page.rect.height-10),450,'rus')
+    edges,body,heading_top=layout or header(page,initial)
+    bottom_limit=page.rect.height-10
+    if band:body,bottom_limit=band
+    clip=(edges[0],body,edges[-1],bottom_limit)
+    primary=ocr(page,clip,600,'eng',stage='Читаю цены · чтение 1 из 2')
+    secondary=ocr(page,clip,450,'eng',stage='Проверяю цены · чтение 2 из 2')
+    if names is None:names=ocr(page,(0,body,edges[0],bottom_limit),450,'rus',stage='Читаю названия городов')
     rows=[]
     for group in lines(primary,2):
         columns={bisect.bisect_right(edges,(w[0]+w[2])/2)-1 for w in group}
@@ -161,7 +167,7 @@ def page_rows(page,initial,page_number):
     requests=[]
     for i,row in enumerate(rows):
         y=row['y'];top=(rows[i-1]['y']+y)/2 if i else body
-        bottom=(rows[i+1]['y']+y)/2 if i+1<len(rows) else y+5
+        bottom=(rows[i+1]['y']+y)/2 if i+1<len(rows) else (bottom_limit if band else y+5)
         label=' '.join(w[4] for w in sorted(names,key=lambda w:(w[1],w[0])) if top<center(w)<bottom)
         row.update(label=label,destination=normalize_city(label),cells=[],top=top,bottom=bottom)
         for col,(left,right) in enumerate(zip(edges,edges[1:])):
@@ -195,43 +201,90 @@ def page_rows(page,initial,page_number):
     return output,errors,heading_top
 
 
-def recognize(path,progress=lambda *a:None):
+def route_bands(names,destination,body,bottom):
+    """Exact city names only; include wrapped labels, never substring/fuzzy matches."""
+    from .cities import normalize_city
+    groups=lines(names,2);found=[]
+    for a in range(len(groups)):
+        for b in range(a+1,min(a+3,len(groups))+1):
+            label=' '.join(w[4] for group in groups[a:b] for w in group)
+            if normalize_city(label)!=destination:continue
+            first=min(w[1] for w in groups[a]);last=max(w[3] for w in groups[b-1])
+            top=(max(w[3] for w in groups[a-1])+first)/2 if a else body
+            low=(last+min(w[1] for w in groups[b]))/2 if b<len(groups) else min(bottom,last+5)
+            found.append((top,low))
+    return found
+
+
+def recognize(path,progress=lambda *a:None,origin_filter=None,destination=None):
     import pymupdf as fitz
     from .cities import city_names,city_pattern
     from .tariff_documents import dated
     from .source_conditions import tax_basis
-    result={'rows':[],'errors':[],'ocr':True,'ocr_pages':[]};origin=None;angle=None
+    global _stage
+    result={'rows':[],'errors':[],'ocr':True,'ocr_pages':[]};origin=None;angle=None;matches=[]
     with fitz.open(path) as doc:
         if len(doc)>40:raise ValueError('Для OCR загрузите не более 40 страниц за раз. Текстовый PDF поддерживает до 80 страниц.')
         for i,page in enumerate(doc):
-            progress(i+1,len(doc),'Распознаю скан: страница '+str(i+1)+' из '+str(len(doc)))
+            _stage=lambda message:progress(i+1,len(doc),f'Страница {i+1} из {len(doc)} · {message}')
+            _stage('Ищу межтерминальную таблицу')
             initial=[];angles=[angle] if angle is not None else ([90,0,270,180] if page.rect.height>page.rect.width else [0,90,180,270])
             for trial in angles:
                 page.set_rotation(trial)
                 # Blank pages must not invoke OCR or produce any price.
                 sample=page.get_pixmap(dpi=20,colorspace=fitz.csGRAY)
                 if all(v>248 for v in sample.samples):continue
-                initial=ocr(page,(0,0,page.rect.width,page.rect.height*.30),300,'rus+eng')
+                # Continuation pages usually have a compact repeated header.
+                # Expand the search if necessary; never OCR body prices just
+                # to locate a header that is already near the top.
+                portion=.13 if angle is not None else .30
+                initial=ocr(page,(0,0,page.rect.width,page.rect.height*portion),300,'rus+eng',stage='Определяю раздел и поворот страницы')
+                other_section=re.search(r'Тарифы на доставку|Тарифы на услуги|Особые требования',as_text(initial),re.I)
+                if portion<.30 and not header_sequence(initial) and not other_section:
+                    initial=ocr(page,(0,0,page.rect.width,page.rect.height*.30),300,'rus+eng',stage='Ищу заголовок в расширенной области')
                 if header_sequence(initial):angle=trial;break
             if not header_sequence(initial):
                 if origin:
-                    title=as_text(ocr(page,(0,0,page.rect.width,min(90,page.rect.height)),300))
+                    title=as_text(initial)
+                    if not re.search(r'Тарифы на доставку|Тарифы на услуги|Особые требования',title,re.I):
+                        title=as_text(ocr(page,(0,0,page.rect.width,min(90,page.rect.height)),300))
                     if re.search(r'Тарифы на доставку|Тарифы на услуги|Особые требования',title,re.I):break
                     result['errors'].append({'source_page':i+1,'message':'OCR: весовая таблица не распознана; страница пропущена.'});continue
                 raise ValueError('OCR не распознал первую межтерминальную таблицу ДЛ. Проверьте компанию, качество скана и наличие первой страницы. Для другого макета используйте XLSX-шаблон.')
-            rows,errors,heading_top=page_rows(page,initial,i+1)
+            layout=header(page,initial);edges,body,heading_top=layout
             if not origin:
-                heading=as_text(ocr(page,(0,0,page.rect.width,heading_top),300))
+                heading=as_text(ocr(page,(0,0,page.rect.width,heading_top),300,stage='Проверяю город отправления и дату'))
                 candidates=[c for c in city_names() if re.search(r'тарифы\s+на\s+межтерминальную\s+перевозку\s+из\s+'+city_pattern(c)+r'(?![а-яё])',heading,re.I)]
                 if len(candidates)!=1:raise ValueError('OCR: в заголовке не подтверждён единственный город отправления ДЛ. Не удалось безопасно привязать цены к маршрутам.')
                 tax=tax_basis(heading)
                 if tax is None:
                     # Read the conditions block separately; a nearby logo can
                     # cause OCR to join "указаны с" in a full-width reading.
-                    conditions=as_text(ocr(page,(page.rect.width*.6,0,page.rect.width,heading_top*.75),400))
+                    conditions=as_text(ocr(page,(page.rect.width*.6,0,page.rect.width,heading_top*.75),400,stage='Читаю условия НДС'))
                     tax=tax_basis(conditions)
                 origin=candidates[0];result.update(origin=origin,document_date=dated(heading),tax_basis=tax)
+                if origin_filter and origin_filter!=origin:
+                    raise ValueError(f'В заголовке скана ДЛ указано отправление из {origin}, а выбран город {origin_filter}. Выберите {origin} или другой прайс.')
+            if destination:
+                # Scan only the narrow city column on each page. Numeric OCR
+                # is deferred until uniqueness across the section is checked.
+                names=ocr(page,(0,body,edges[0],page.rect.height-10),450,'rus',stage=f'Ищу город «{destination}»')
+                for band in route_bands(names,destination,body,page.rect.height-10):
+                    matches.append((i,angle,initial,layout,band,names))
+                continue
+            rows,errors,_=page_rows(page,initial,i+1,layout=layout)
             result['rows'].extend(rows);result['errors'].extend(errors);result['ocr_pages'].append(i+1)
+        if destination:
+            if not matches:raise ValueError(f'OCR: в межтерминальной таблице не найдена однозначная строка города {destination}. Проверьте документ и выбранное направление.')
+            if len(matches)!=1:raise ValueError(f'OCR: город {destination} повторяется в документе. Разделите разные разделы/редакции прайса.')
+            i,rotation,initial,layout,band,names=matches[0];page=doc[i];page.set_rotation(rotation)
+            rows,errors,_=page_rows(page,initial,i+1,layout=layout,band=band,names=names)
+            result['rows']=[row for row in rows if row['destination']==destination]
+            result['errors'].extend(errors);result['ocr_pages']=[i+1]
+            result['ocr_scope']='route'
+            if not result['rows']:
+                detail=next((e['message'] for e in errors if e.get('destination')==destination),'Проверьте качество строки и загрузите более чёткий PDF.')
+                raise ValueError(f'OCR: строка города {destination} не прошла проверку. '+detail)
     if not result['rows']:raise ValueError('OCR не нашёл однозначных тарифных строк. Загрузите более чёткий PDF или заполните XLSX-шаблон.')
     destinations=[r['destination'] for r in result['rows']]
     if len(set(destinations))!=len(destinations):raise ValueError('OCR: в документе повторяется город назначения. Разделите разные разделы/редакции прайса.')
@@ -240,9 +293,14 @@ def recognize(path,progress=lambda *a:None):
 
 def main():
     source,output,progress_path=map(Path,sys.argv[1:4])
+    sequence=0
     def progress(done,total,message):
-        temp=progress_path.with_suffix('.tmp');temp.write_text(json.dumps({'done':done,'total':total,'message':message},ensure_ascii=False),encoding='utf-8');temp.replace(progress_path)
-    try:result=recognize(source,progress)
+        nonlocal sequence
+        sequence+=1
+        temp=progress_path.with_suffix('.tmp');temp.write_text(json.dumps({'done':done,'total':total,'message':message,'sequence':sequence},ensure_ascii=False),encoding='utf-8');temp.replace(progress_path)
+    try:
+        selection=json.loads(sys.argv[4]) if len(sys.argv)>4 else {}
+        result=recognize(source,progress,**selection)
     except Exception as exc:result={'error':str(exc)}
     output.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8')
 

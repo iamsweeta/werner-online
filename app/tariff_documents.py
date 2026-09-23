@@ -412,7 +412,7 @@ def _parse_document(raw, filename, company, origin, destination):
     if ext=='.pdf':
         from . import scan_ocr
         if scan_ocr.needed(raw):
-            return scan_ocr.parse(scan_ocr.prepare(raw,company),origin,destination)
+            return scan_ocr.parse(scan_ocr.prepare(raw,company,origin=origin,destination=destination),origin,destination)
         first=pdf_reader(raw).pages[0].extract_text() or ''
         if 'Тарифы на межтерминальную перевозку из' in first:
             if company!='ДЛ':raise ValueError('Это PDF Деловых Линий: выберите компанию ДЛ')

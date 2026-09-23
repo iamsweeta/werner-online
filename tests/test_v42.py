@@ -28,7 +28,7 @@ class V42Tests(unittest.TestCase):
 
     def test_health_and_two_routes(self):
         d=self.client.get('/health').json()
-        self.assertEqual(d['version'],'55.0')
+        self.assertEqual(d['version'],'56.0')
         self.assertEqual(d['engine'],'v51_verified_sources')
         self.assertEqual(d['port_hint'],8423)
         self.assertGreater(d['cities_count'],200)
@@ -167,7 +167,7 @@ class V42Tests(unittest.TestCase):
             self.assertEqual(r.status_code,200)
             wb=load_workbook(BytesIO(r.content),data_only=True); ws=wb.active
             self.assertEqual(ws['B1'].value,f'{o} → {d}')
-            self.assertEqual(ws['B2'].value,'55.0')
+            self.assertEqual(ws['B2'].value,'56.0')
 
     def test_specialized_collectors_are_direction_specific(self):
         rates=(600.0,[(250.0,12.0),(750.0,11.0),(1250.0,10.0),(2500.0,9.0),(5000.0,8.0)],'Москва-Юг')
@@ -356,7 +356,7 @@ class V42Tests(unittest.TestCase):
 
     def test_launcher_uses_independent_v42_port(self):
         root=Path(__file__).resolve().parents[1]
-        cmd=(root/'START_WINDOWS_V55_0.cmd').read_text(encoding='utf-8',errors='ignore')
+        cmd=(root/'START_WINDOWS_V56_0.cmd').read_text(encoding='utf-8',errors='ignore')
         self.assertIn('8423',cmd)
         self.assertIn('launch.py',cmd)
         self.assertIn('app.v42_main:app',(root/'launch.py').read_text())

@@ -525,7 +525,10 @@ async function monitorImportJob(jobId,seq,initial=null,recoverUpload=false){
         forgetImportJob(jobId);importsState.jobId=null;$('importMessage').textContent=job.message||'Распознавание остановлено. Загрузите документ снова.';return;
       }
       if(!['queued','parsing'].includes(job.status))throw Error('Сервер вернул неизвестный статус. Откройте окно загрузки снова.');
-      $('importMessage').textContent=(job.message||'Распознаю документ…')+' Можно закрыть окно — обработка продолжится. При повторном открытии появится результат.';
+      const elapsed=Number(job.elapsed_seconds)||0,stageElapsed=Number(job.stage_elapsed_seconds)||0;
+      const timing=elapsed>0?` Прошло ${Math.floor(elapsed/60)} мин ${elapsed%60} сек.`:'';
+      const slow=job.ocr_page&&stageElapsed>=30?` Текущий этап выполняется ${stageElapsed} сек. Если он не завершится за 120 сек, обработка остановится с пояснением.`:'';
+      $('importMessage').textContent=(job.message||'Распознаю документ…')+timing+slow+' Можно закрыть окно — обработка продолжится на сервере. При повторном открытии покажем статус или результат.';
       if(Date.now()-began>900000)throw Error('Обработка продолжается дольше обычного. Откройте окно снова, чтобы проверить результат.');
       job=null;await new Promise(resolve=>setTimeout(resolve,1200));
     }

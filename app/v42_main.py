@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="55.0"
+VERSION="56.0"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"

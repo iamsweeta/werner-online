@@ -26,7 +26,7 @@ async function scenario(mode){
     data={job_id:jobId,status:'queued',message:'Файл принят'};
    }else if(u.pathname==='/api/import/jobs/'+jobId){
     polls++;if(mode==='poll502'&&polls===1)return {ok:false,status:502,json:async()=>({})};
-    data=ready?{job_id:jobId,status:'ready',preview}:{job_id:jobId,status:'parsing',message:'Распознаю скан: страница 2 из 9'};
+    data=ready?{job_id:jobId,status:'ready',preview}:{job_id:jobId,status:'parsing',message:'Страница 2 из 9 · Проверяю цены',ocr_page:2,elapsed_seconds:70,stage_elapsed_seconds:35};
    }else if(u.pathname==='/api/import/commit'){commits++;data={company:'Werner',origin:'Казань',destination:'Уфа',rows:1,meta:{}};}
    else throw Error('Unexpected '+url);
    return {ok:true,status:200,json:async()=>data};
@@ -37,6 +37,7 @@ async function scenario(mode){
  current.$('importButton').click();await until(()=>current.$('importDialog').open);
  Object.defineProperty(current.$('importFile'),'files',{configurable:true,value:[new current.w.File(['scan'],'scan.pdf')]});
  current.$('importPreviewButton').click();await until(()=>polls>=2);
+ assert.match(current.$('importMessage').textContent,/Прошло 1 мин 10 сек/);assert.match(current.$('importMessage').textContent,/этап выполняется 35 сек/);assert.match(current.$('importMessage').textContent,/120 сек/);
  assert.equal(posts,1);assert.equal(commits,0);assert.equal(current.$('importApplyButton').disabled,true);
  if(mode==='reload'){
   const saved=Object.fromEntries(Object.keys(current.w.localStorage).map(k=>[k,current.w.localStorage.getItem(k)]));
