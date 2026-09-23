@@ -2,12 +2,12 @@
 const wsEl=id=>document.getElementById(id);
 const documentState={job:null,busy:false,file:null,files:[],resolutions:{},seq:0};
 function setWorkspace(name,{focus=false}={}){
-  if(!['bulk','route','documents'].includes(name))name='bulk';
+  if(!['bulk','route','documents'].includes(name))name='route';
   state.workspace=name;localStorage.setItem('tariff-workspace-v48',name);
   const panels={bulk:'bulkPanel',route:'routeWorkspace',documents:'documentsPanel'};
   Object.entries(panels).forEach(([key,id])=>wsEl(id).hidden=key!==name);
   document.querySelectorAll('[data-workspace]').forEach(btn=>{const on=btn.dataset.workspace===name;btn.classList.toggle('active',on);btn.setAttribute('aria-selected',String(on));btn.tabIndex=on?0:-1;});
-  const labels={bulk:['Большая таблица','Обновление тарифов в формате заказчика'],route:['Один маршрут','Сравнение компаний и отдельный Excel'],documents:['Прайс-листы','Документы для заполнения недостающих цен']};
+  const labels={bulk:['Большая таблица','Тарифы по всем маршрутам в Excel'],route:['Один маршрут','Сравните цены перевозчиков'],documents:['Прайс-листы','Загрузите и сохраните цены из файлов']};
   wsEl('workspaceTitle').textContent=labels[name][0];wsEl('workspaceSubtitle').textContent=labels[name][1];
   if(focus)wsEl('workspaceTitle').focus({preventScroll:true});
   if(name==='documents')refreshDocuments();
@@ -27,7 +27,7 @@ async function initWorkspace(){
   wsEl('documentOrigin').innerHTML='<option value="">Определить из файла</option>'+cities;
   wsEl('documentCompany').innerHTML=state.options.companies.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join('');
   documentGuide();updateThemeButton();
-  setWorkspace(localStorage.getItem('tariff-workspace-v48')||'bulk');
+  setWorkspace('route');
   await refreshDocuments();
   getJSON('/api/storage').then(info=>{if(wsEl('storageInfo'))wsEl('storageInfo').textContent=`${info.files} оригиналов · ${(info.bytes/1024/1024).toFixed(1)} МБ. ${info.confirmed_retention} ${info.disabled_retention} Предпросмотр действует 30 минут. Папка: ${info.location}`;}).catch(()=>{});
 }
@@ -165,7 +165,7 @@ document.querySelectorAll('[data-workspace]').forEach(btn=>{
     const next=tabs[(tabs.indexOf(btn)+(['ArrowLeft','ArrowUp'].includes(event.key)?-1:1)+tabs.length)%tabs.length];next.click();next.focus();
   });
 });
-document.querySelector('[data-open-workspace]').addEventListener('click',e=>{e.preventDefault();setWorkspace('bulk');});
+document.querySelector('[data-open-workspace]').addEventListener('click',e=>{e.preventDefault();setWorkspace('route');});
 wsEl('bulkDocumentsButton').addEventListener('click',()=>setWorkspace('documents',{focus:true}));
 wsEl('documentsExportButton').addEventListener('click',()=>setWorkspace('bulk',{focus:true}));
 wsEl('documentFile').addEventListener('change',()=>selectDocuments(wsEl('documentFile').files));
@@ -200,7 +200,7 @@ async function refreshRouteDocuments(origin,destination){
     if(seq!==routeDocumentsState.seq||wsEl('originSelect').value!==origin||wsEl('destinationSelect').value!==destination)return;
     const companies=(state.options?.companies||[]).filter(c=>state.calculationCompanies.has(c.id));
     const matched=(data.files||[]).filter(f=>state.calculationCompanies.has(f.company));
-    wsEl('routeDocumentStatus').textContent=matched.length?`${origin} → ${destination}: ${matched.length} подходящих документов. Выбор сохраняется для обеих таблиц.`:data.total_files?'Для выбранных компаний и направления подходящих документов нет. Проверьте направление в библиотеке или загрузите нужный прайс.':'Библиотека пуста. Загрузите и подтвердите прайс в разделе «Прайс-листы» или кнопкой «Загрузить прайс для маршрута».';
+    wsEl('routeDocumentStatus').textContent=matched.length?`Подходящих файлов: ${matched.length}.`:data.total_files?'Для выбранных компаний и направления подходящих документов нет. Проверьте направление в библиотеке или загрузите нужный прайс.':'Сохранённых прайсов пока нет. Нажмите «Добавить прайс».';
     host.innerHTML=companies.map(company=>{
       const files=matched.filter(f=>f.company===company.id);if(!files.length)return '';
       const chosen=files.find(f=>f.selected);
@@ -226,7 +226,7 @@ async function openDocumentRoutes(button){
   button.disabled=true;host.hidden=false;host.textContent='Читаю направления документа…';
   try{
     const data=await getJSON('/api/price-documents/'+encodeURIComponent(button.dataset.documentRoutes)+'/routes');
-    host.innerHTML=`<label class="field"><span>Направление из документа</span><select>${data.routes.map((r,i)=>`<option value="${i}">${escapeHtml(r.origin)} → ${escapeHtml(r.destination)} · ${r.values_count} цен</option>`).join('')}</select></label><button type="button" class="button secondary">Использовать в «Одном маршруте»</button><small>Этот же документ будет источником выбранного направления в большой таблице.</small>`;
+    host.innerHTML=`<label class="field"><span>Направление из документа</span><select>${data.routes.map((r,i)=>`<option value="${i}">${escapeHtml(r.origin)} → ${escapeHtml(r.destination)} · ${r.values_count} цен</option>`).join('')}</select></label><button type="button" class="button secondary">Использовать в «Одном маршруте»</button><small>Выбор используется и в большой таблице.</small>`;
     host.querySelector('button').addEventListener('click',async()=>{
       const route=data.routes[Number(host.querySelector('select').value)];if(!route)return;
       const action=host.querySelector('button');action.disabled=true;

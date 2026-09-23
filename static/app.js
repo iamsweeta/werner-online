@@ -7,7 +7,7 @@ const cleanText = (v) => String(v ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g
 const truncate = (v, n=150) => { const t=cleanText(v); return t.length>n ? `${t.slice(0,n-1)}…` : t; };
 
 const state = {
-  workspace:typeof initWorkspace==='function'?'bulk':'route',
+  workspace:'route',
   options:null, comparison:null, matrix:null, busy:false, bulkActive:false,
   compareSeq:0, compareController:null, optionsSeq:0, optionsController:null,
   refreshingRoutes:new Set(), refreshedRoutes:new Set(),
@@ -53,7 +53,7 @@ function updateUnitLabels(){
   const note=$('unitModeNote');if(note)note.textContent=state.unitMode==='per_kg'?'₽/кг = стоимость отправки ÷ контрольный вес. Это расчётная величина, включая минимальную плату. МИН всегда в ₽.':'Показана стоимость всей отправки на контрольном весе. МИН — минимальная стоимость отправления по компании.';
   for(const [key,label] of Object.entries({small:'0–50 кг',medium:'100–1500 кг',heavy:'1500–5000 кг'})){const option=$('graphScopeSelect')?.querySelector(`option[value=${key}]`);if(option)option.textContent=label+' · '+'₽ за отправку';}
   const ps=$('profileSelect'); const profiles=state.options?.profiles||[];
-  if(ps && profiles.length){ const selected=ps.value; ps.innerHTML=profiles.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.description)} · ${escapeHtml(p.is_minimum_profile?'Минимум':state.unitMode==='per_kg'?'Расчётная стоимость':'Стоимость отправки')} · ${escapeHtml(activeUnit(p))}</option>`).join(''); if(profiles.some(p=>p.id===selected)) ps.value=selected; }
+  if(ps && profiles.length){ const selected=ps.value; ps.innerHTML=profiles.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.range_weight||p.label||p.description)}</option>`).join(''); if(profiles.some(p=>p.id===selected)) ps.value=selected; }
 }
 function rerenderUnitMode(){ updateUnitLabels(); if(state.comparison) renderComparison(state.comparison); if(state.matrix){ renderMatrix(state.matrix); renderTariffGraph(state.matrix); } }
 
@@ -81,10 +81,16 @@ async function loadOptions(origin='Москва',destination=$('destinationSelec
 function renderCompanySelector(){
   const host=$('calculationCompanySelector');
   host.innerHTML=(state.options?.companies||[]).map(c=>`<label class="company-option ${state.calculationCompanies.has(c.id)?'active':''}"><input type="checkbox" ${state.refreshLocked?'disabled':''} value="${escapeHtml(c.id)}" ${state.calculationCompanies.has(c.id)?'checked':''}><span>${escapeHtml(c.label)}</span></label>`).join('');
-  host.querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{ if(input.checked) state.calculationCompanies.add(input.value); else state.calculationCompanies.delete(input.value); renderCompanySelector(); renderIntegrations(state.options?.integration_status||{}); }));
+  host.querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{ if(input.checked) state.calculationCompanies.add(input.value); else state.calculationCompanies.delete(input.value); renderCompanySelector(); renderIntegrations(state.options?.integration_status||{}); refreshCompanyView(); }));
   $('calculationSelectionMessage').textContent=`${state.calculationCompanies.size} из ${(state.options?.companies||[]).length}`;
 }
-function setAllCompanies(on){ state.calculationCompanies.clear(); if(on)(state.options?.companies||[]).forEach(c=>state.calculationCompanies.add(c.id)); renderCompanySelector(); renderIntegrations(state.options?.integration_status||{}); }
+function setAllCompanies(on){ state.calculationCompanies.clear(); if(on)(state.options?.companies||[]).forEach(c=>state.calculationCompanies.add(c.id)); renderCompanySelector(); renderIntegrations(state.options?.integration_status||{}); refreshCompanyView(); }
+function refreshCompanyView(){
+  if(state.calculationCompanies.size){compare();return;}
+  state.compareSeq++;state.compareController?.abort();setBusy(false);
+  if(state.comparison)renderComparison({...state.comparison,items:[],online_count:0,online_lower_bound_count:0});
+  if(state.matrix){renderMatrix(state.matrix);renderTariffGraph(state.matrix);}
+}
 
 function visiblePrice(item){return !state.liveOnly || item?.online || (state.includeImports && item?.uploaded);}
 function statusLabel(item){
@@ -152,13 +158,13 @@ function renderTariffGraph(data){
     });
     return {company,...company,color:graphColor(idx),values,count:values.filter(numeric).length};
   });
-  legend.innerHTML=series.map(s=>`<button type="button" class="graph-legend-item ${s.count?'':'no-data'} ${state.hiddenGraphCompanies.has(s.id)?'hidden-series':''}" data-company="${escapeHtml(s.id)}" ${s.count?'':'disabled'}><i style="--series-color:${s.color}"></i><span>${escapeHtml(s.label)}</span><small>${s.count?`${s.count} точек`:'нет точной линии'}</small></button>`).join('');
+  legend.innerHTML=series.map(s=>`<button type="button" class="graph-legend-item ${s.count?'':'no-data'} ${state.hiddenGraphCompanies.has(s.id)?'hidden-series':''}" data-company="${escapeHtml(s.id)}" ${s.count?'':'disabled'}><i style="--series-color:${s.color}"></i><span>${escapeHtml(s.label)}</span>${s.count?'':'<small>нет цен</small>'}</button>`).join('');
   legend.querySelectorAll('button:not([disabled])').forEach(btn=>btn.addEventListener('click',()=>{ const id=btn.dataset.company; if(state.hiddenGraphCompanies.has(id)) state.hiddenGraphCompanies.delete(id); else state.hiddenGraphCompanies.add(id); renderTariffGraph(data); }));
 
   const visible=series.filter(s=>s.count && !state.hiddenGraphCompanies.has(s.id));
   const allValues=visible.flatMap(s=>s.values.filter(numeric));
   if(!allValues.length){ host.innerHTML=`<div class="empty">${series.some(s=>s.count)?'Все линии скрыты. Нажмите на компанию в легенде, чтобы вернуть её на график.':'Нет подтверждённых точек для выбранного масштаба и фильтра свежести.'}</div>`; return; }
-  const width=Math.max(1000, rows.length*72); const height=520;
+  const width=Math.max(1000, rows.length*72); const height=420;
   const m={left:72,right:28,top:26,bottom:112}; const plotW=width-m.left-m.right; const plotH=height-m.top-m.bottom;
   const rawMax=Math.max(...allValues); const rawMin=Math.min(...allValues);
   const step=rawMax>100000?20000:rawMax>50000?10000:rawMax>10000?2000:rawMax>2000?500:rawMax>500?100:20;
@@ -182,12 +188,12 @@ function renderTariffGraph(data){
   });
   const graphUnit='₽';
   const scopeText=`${minWeight}–${maxWeight} кг · ${graphUnit}`;
-  host.innerHTML=`<div class="graph-scroll"><svg class="tariff-graph" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="График тарифов компаний по весовым диапазонам"><text x="18" y="${m.top+plotH/2}" transform="rotate(-90 18 ${m.top+plotH/2})" class="graph-axis-title">${graphUnit}</text>${marker}${grid.join('')}<line x1="${m.left}" x2="${width-m.right}" y1="${m.top+plotH}" y2="${m.top+plotH}" class="graph-axis"/>${paths.join('')}${xLabels}</svg></div><div class="graph-note">Масштаб: ${scopeText}. Минимум по видимым точкам ${fmt(rawMin,graphUnit)}, максимум ${fmt(rawMax,graphUnit)}. Строка «МИН» и цены «от» не строятся. Текстовая пометка означает отсутствие сопоставимой числовой ставки, а не ноль.</div>`;
+  host.innerHTML=`<div class="graph-scroll"><svg class="tariff-graph" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="График тарифов компаний по весовым диапазонам"><text x="18" y="${m.top+plotH/2}" transform="rotate(-90 18 ${m.top+plotH/2})" class="graph-axis-title">${graphUnit}</text>${marker}${grid.join('')}<line x1="${m.left}" x2="${width-m.right}" y1="${m.top+plotH}" y2="${m.top+plotH}" class="graph-axis"/>${paths.join('')}${xLabels}</svg></div><details class="graph-note"><summary>Данные диаграммы</summary><p>Диапазон: ${scopeText}. Минимум ${fmt(rawMin,graphUnit)}, максимум ${fmt(rawMax,graphUnit)}. Строка «МИН» и цены «от» не строятся.</p></details>`;
 }
 function renderComparison(data){
   state.comparison=data;
   const savedTimes=(data.items||[]).map(i=>i.captured_at).filter(t=>t&&Number.isFinite(Date.parse(t))).sort((a,b)=>Date.parse(b)-Date.parse(a));
-  $('updatedAt').textContent=savedTimes.length?'Последние данные: '+new Date(savedTimes[0]).toLocaleString('ru-RU')+' · сохранены без срока удаления':'Сохранённых цен пока нет';
+  $('updatedAt').textContent=savedTimes.length?'Последние данные: '+new Date(savedTimes[0]).toLocaleString('ru-RU'):'Сохранённых цен пока нет';
   const selectedProfile=(state.options?.profiles||[]).find(p=>p.id===data.profile_id)||{}; const unit=activeUnit(selectedProfile); $('summaryTitle').textContent=`${data.range_weight} · ${selectedProfile.tariff_type||'Тариф'} · ${unit}`;
   $('summaryRoute').textContent=`${data.origin} → ${data.destination}`;
   const items=data.items||[];
@@ -272,6 +278,10 @@ async function compare(){
     if(seq===state.compareSeq) setBusy(false);
   }
 }
+function routeNotice(message,error=false){
+  const node=$('routeLoadStatus');if(!node)return;
+  node.hidden=!message;node.textContent=message;node.classList.toggle('error',error);
+}
 function renderJob(job){
   state.lastJob=job;
   if($('routeStopButton')){$('routeStopButton').hidden=!['queued','running'].includes(job.status);$('routeStopButton').disabled=!!job.stop_requested;}
@@ -281,6 +291,7 @@ function renderJob(job){
   syncRetryButtons();
   const total=(job.requested_companies||[]).length;
   const done=Number(job.completed_companies??results.length);
+  routeNotice(job.status==='done'?`Обновление завершено: ${job.success_count||0} из ${total} компаний. ${job.failed_count?'Есть ошибки — подробности в статистике.':''}`:job.status==='paused'?'Загрузка остановлена. Полученные цены сохранены.':job.status==='error'?'Обновление прервано. Подробности в статистике.':job.stop_requested?'Останавливаю загрузку…':`Обновляю цены: ${done} из ${total} компаний…`,job.status==='error');
   $('liveAuditTitle').textContent=`${job.origin} → ${job.destination}: ${job.status==='done'?'проверка завершена':job.status==='error'?'ошибка проверки':job.status==='paused'?'остановлено':'загрузка'} · ${done}/${total} компаний`;
   $('liveAuditText').textContent=job.status==='done'
     ?`Обновлено: ${job.success_count||0}. Ошибок: ${job.failed_count||0}. Нет опубликованного прайса маршрута: ${job.unavailable_count||0}. Неполных таблиц: ${job.partial_count||0}. Прайсы и открытые API заполняют доступные веса; остальные калькуляторы — выбранный вес. Подробности по каждой компании ниже.`
@@ -299,7 +310,7 @@ async function monitorJob(job){
       let d;
       try{d=await getJSON(`/api/collect-status?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`);errors=0;}
       catch(e){
-        errors++;$('liveAuditText').textContent='Связь с приложением прервана. Повторяю проверку состояния…';
+        errors++;routeNotice('Связь прервалась. Проверяю состояние загрузки…',true);$('liveAuditText').textContent='Связь с приложением прервана. Повторяю проверку состояния…';
         if(errors>=5)throw e;
         await new Promise(resolve=>setTimeout(resolve,3000));continue;
       }
@@ -312,7 +323,7 @@ async function monitorJob(job){
       if(!['queued','running'].includes(d.status))break;
       await new Promise(resolve=>setTimeout(resolve,2000));
     }
-  }catch(e){$('liveAuditText').textContent=`Не удалось получить состояние: ${e.message}. При восстановлении связи проверка возобновится.`;}
+  }catch(e){routeNotice('Не удалось проверить загрузку. Сохранённые цены остаются доступны.',true);$('liveAuditText').textContent=`Не удалось получить состояние: ${e.message}. При восстановлении связи проверка возобновится.`;}
   finally{state.refreshingRoutes.delete(key);setRefreshRouteLock(false);}
 }
 async function refreshRouteSources(force=false,onlyCompanies=null){
@@ -324,7 +335,7 @@ async function refreshRouteSources(force=false,onlyCompanies=null){
     if(d.status==='fresh'){
       const last=await getJSON(`/api/collect-status?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`);
       if(last.status!=='idle')renderJob(last);
-      else {$('liveAuditTitle').textContent='Онлайн-данные уже проверены';$('liveAuditText').textContent=d.message;}
+      else {routeNotice('Цены уже обновлены.');$('liveAuditTitle').textContent='Онлайн-данные уже проверены';$('liveAuditText').textContent=d.message;}
       return;
     }
     if(d.status==='busy'){
@@ -332,7 +343,7 @@ async function refreshRouteSources(force=false,onlyCompanies=null){
       if(active.mode==='bulk'){setRefreshRouteLock(false);await monitorBulk(active.bulk_job_id);}
       else if(active.status!=='idle')await monitorJob(active);
     }else await monitorJob({...d,origin,destination});
-  }catch(e){$('liveAuditTitle').textContent='Не удалось начать загрузку';$('liveAuditText').textContent=e.message;toast(e.message);}
+  }catch(e){routeNotice('Не удалось начать обновление: '+e.message,true);$('liveAuditTitle').textContent='Не удалось начать загрузку';$('liveAuditText').textContent=e.message;toast(e.message);}
   finally{if(!state.refreshingRoutes.size)setRefreshRouteLock(false);}
 }
 async function updateSources(){await refreshRouteSources(true);}
@@ -375,7 +386,7 @@ async function updateBulkPlan(){
     const plan=await getJSON('/api/bulk/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(bulkBody())});
     if(seq!==bulkState.planSeq)return;
     const n=x=>Number(x).toLocaleString('ru-RU');
-    $('bulkPlan').textContent=`${n(plan.routes)} маршрутов · ${plan.companies} компаний · ${n(plan.checks)} проверок компаний. ${plan.export_parts===1?'Один Excel по образцу.':`ZIP с ${plan.export_parts} файлами Excel по образцу.`} Каждое направление проверяется отдельно; наличие города в справочнике не означает наличие тарифа у каждой компании.`;
+    $('bulkPlan').textContent=`${n(plan.routes)} маршрутов · ${plan.companies} компаний · ${plan.export_parts===1?'один Excel':`ZIP: ${plan.export_parts} файлов Excel`}`;
     bulkState.planReady=true;
   }catch(e){if(seq===bulkState.planSeq)$('bulkPlan').textContent=e.message;}
   finally{if(seq===bulkState.planSeq)bulkControls();}
@@ -387,7 +398,8 @@ function renderBulk(job){
   const current=job.current?` Сейчас: ${job.current.origin} → ${job.current.destination}.`:'';
   const outcomes=job.outcomes||{};
   const exportText=job.export_outdated?' Данные изменились. Пересоберите Excel.':job.export_status==='running'?' Создаётся Excel…':job.export_status==='ready'?' Excel готов.':job.export_status==='error'?' Не удалось создать Excel. Можно повторить выгрузку.':'';
-  $('bulkStatus').textContent=`${job.mode==='saved'?'Сбор из текущих данных и прайсов':(labels[job.status]||job.status)}. Маршрутов: ${job.completed_routes}/${job.total_routes}. Проверок компаний: ${job.completed_checks}/${job.total_checks}. Полная сетка: ${outcomes.complete||0}; неполные: ${outcomes.partial||0}; ошибки: ${outcomes.failed||0}; без публичного тарифа: ${outcomes.unavailable||0}. ${outcomes.saved?'Обработано из текущих данных: '+outcomes.saved+'. ':''}${current}${exportText} ${job.message||''}`;
+  $('bulkStatus').textContent=`${job.mode==='saved'?'Сбор из сохранённых цен':(labels[job.status]||job.status)} · ${job.completed_routes}/${job.total_routes} маршрутов.${current}${exportText}`;
+  $('bulkDetails').textContent=`Проверки компаний: ${job.completed_checks}/${job.total_checks}. Полная сетка: ${outcomes.complete||0}; неполные: ${outcomes.partial||0}; ошибки: ${outcomes.failed||0}; без публичного тарифа: ${outcomes.unavailable||0}. ${job.message||''}`;
   $('bulkProgress').hidden=false;$('bulkProgress').value=job.percent||0;
   const download=$('bulkDownload');download.hidden=!job.download_url;
   if(job.download_url){download.href=job.download_url;download.textContent=job.total_routes>400?'Скачать Excel-файлы в ZIP':'Скачать большую таблицу';}
@@ -436,7 +448,7 @@ async function openSettings(){
   if(!dialog.open) dialog.showModal();
 }
 function closeSettings(){if($('settingsDialog').open)$('settingsDialog').close();}
-const importsState={seq:0,route:null,token:null,busy:false,companies:{},jobId:null};
+const importsState={seq:0,route:null,token:null,busy:false,companies:{},jobId:null,applying:false,applied:false};
 const IMPORT_JOB_KEY='tariff-route-import-jobs-v55';
 function importJobKey(route=importsState.route){return JSON.stringify([route?.origin,route?.destination]);}
 function savedImportJob(){
@@ -457,19 +469,23 @@ function forgetImportJob(jobId){
   }catch{}
 }
 function resetImportPreview(){
+  importsState.applied=false;$('importApplyFeedback').hidden=true;$('importApplyFeedback').textContent='';$('importApplyFeedback').classList.remove('error');$('importDoneButton').hidden=true;$('importApplyButton').textContent='Применить цены из файла';
   importsState.seq++;importsState.token=null;importsState.jobId=null;$('importPreview').hidden=true;
   $('importConfirmed').checked=false;$('importApplyButton').disabled=true;$('importMessage').textContent='';
 }
 function importBusy(busy){
   importsState.busy=busy;
-  ['importCompany','importFile','importPreviewButton','importRemoveButton'].forEach(id=>$(id).disabled=busy);
+  ['importCompany','importFile','importPreviewButton','importRemoveButton','importConfirmed'].forEach(id=>$(id).disabled=busy);
   $('importApplyButton').disabled=busy||!importsState.token||!$('importConfirmed').checked;
+  $('importApplyButton').setAttribute('aria-busy',String(importsState.applying));
+  $('closeImportButton').disabled=importsState.applying;
+  $('importApplyButton').textContent=importsState.applying?'Применяю…':importsState.applied?'✓ Цены применены':'Применить цены из файла';
 }
 function showCurrentImport(){
   const saved=importsState.companies[$('importCompany').value];
   const guide=state.options?.import_guide?.[$('importCompany').value];
   $('importCompanyGuide').innerHTML=guide?`<a href="${escapeHtml(guide.page_url)}" target="_blank" rel="noopener">Где скачать прайс ${escapeHtml($('importCompany').value)}</a><span>${escapeHtml(guide.instruction)}</span>`:'';
-  $('importCurrent').textContent=saved?`Документ в библиотеке: ${saved.original_filename}. Импортирован: ${saved.uploaded_at}. Дата в документе: ${saved.document_date||'не распознана'}.`:'Для этой компании и направления пользовательский файл ещё не применён.';
+  $('importCurrent').textContent=saved?`Применён: ${saved.original_filename} · дата прайса: ${saved.document_date||'не указана'}`:'Прайс для этой компании ещё не применён.';
   $('importRemoveButton').hidden=!saved;
 }
 async function openImport(){
@@ -493,7 +509,7 @@ async function openImport(){
     }
   }
 }
-function closeImport(){resetImportPreview();$('importDialog').close();}
+function closeImport(){if(importsState.applying)return;resetImportPreview();$('importDialog').close();}
 function renderImportPreview(data){
   if(data.origin!==importsState.route.origin||data.destination!==importsState.route.destination||data.company!==$('importCompany').value)throw Error('Результат относится к другому маршруту или компании. Откройте нужное направление.');
   importsState.token=data.token;
@@ -564,22 +580,40 @@ async function previewImport(){
   }
   finally{if(seq===importsState.seq)importBusy(false);}
 }
+function importApplyNotice(message,error=false){
+  const node=$('importApplyFeedback');node.hidden=false;node.textContent=message;node.classList.toggle('error',error);node.dataset.state=importsState.applying?'pending':error?'error':'success';
+  node.scrollIntoView?.({block:'nearest'});
+}
 async function applyImport(){
   if(importsState.busy||!importsState.token||!$('importConfirmed').checked)return;
-  importBusy(true);
+  const seq=importsState.seq;
+  importsState.applying=true;importBusy(true);importApplyNotice('Применяю цены…');
+  let data;
   try{
-    const data=await getJSON('/api/import/commit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:importsState.token})});
-    forgetImportJob(importsState.jobId);importsState.jobId=null;
-    importsState.token=null;importsState.companies[data.company]=data.meta;showCurrentImport();
-    $('importMessage').textContent=`✓ Файл «${data.meta.original_filename}» применён. Сохранено ${data.rows} цен.`;
-    if(typeof appliedFileNotice==='function')appliedFileNotice({company:data.company,origin:data.origin,destination:data.destination,filename:data.meta.original_filename,applied_prices:data.rows,document_id:data.meta.document_id});
-    state.calculationCompanies.add(data.company);
-    // Make the explicitly applied document visible immediately, including export.
-    state.liveOnly=false;state.includeImports=true;$('liveModeSelect').value='all';
-    await loadOptions(data.origin,data.destination);await compare();
+    data=await getJSON('/api/import/commit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:importsState.token})});
+  }catch(e){
+    importApplyNotice('Не удалось подтвердить применение: '+e.message,true);
+    $('importMessage').textContent=e.message;
+    return;
+  }finally{importsState.applying=false;if(!data)importBusy(false);}
+  forgetImportJob(importsState.jobId);importsState.jobId=null;
+  importsState.token=null;importsState.applied=true;importsState.companies[data.company]=data.meta;showCurrentImport();
+  const message=`✓ Цены применены. ${data.company} · ${data.origin} → ${data.destination}. Файл «${data.meta.original_filename}» · ${data.rows} цен.`;
+  $('importMessage').textContent=message;importApplyNotice(message);
+  $('importDoneButton').hidden=false;importBusy(false);$('importDoneButton').focus();toast('Цены из файла применены');
+  if(typeof appliedFileNotice==='function')appliedFileNotice({company:data.company,origin:data.origin,destination:data.destination,filename:data.meta.original_filename,applied_prices:data.rows});
+  state.calculationCompanies.add(data.company);
+  state.liveOnly=false;state.includeImports=true;$('liveModeSelect').value='all';
+  // Application succeeded already. A subsequent refresh error must not turn
+  // this receipt into a false "not applied" message or allow a duplicate commit.
+  try{
+    if($('originSelect').value===data.origin&&$('destinationSelect').value===data.destination){await loadOptions(data.origin,data.destination);await compare();}
     if(typeof refreshDocuments==='function'){await refreshDocuments();await refreshBulkAfterDocuments();}
-  }catch(e){$('importMessage').textContent=e.message;}
-  finally{importBusy(false);}
+  }catch(e){
+    const notice='Цены сохранены. Не удалось обновить экран — обновите страницу.';
+    if(seq===importsState.seq)importApplyNotice(message+' '+notice);
+    toast(notice);
+  }
 }
 async function removeImport(){
   if(importsState.busy)return;
@@ -594,7 +628,8 @@ async function removeImport(){
 }
 $('importButton').addEventListener('click',openImport);
 $('closeImportButton').addEventListener('click',closeImport);
-$('importDialog').addEventListener('cancel',()=>resetImportPreview());
+$('importDialog').addEventListener('cancel',event=>{if(importsState.applying)event.preventDefault();else resetImportPreview();});
+$('importDoneButton').addEventListener('click',closeImport);
 $('importCompany').addEventListener('change',()=>{resetImportPreview();$('importFile').value='';showCurrentImport();});
 $('importFile').addEventListener('change',resetImportPreview);
 $('importConfirmed').addEventListener('change',()=>importBusy(importsState.busy));
