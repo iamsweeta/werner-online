@@ -1,0 +1,26 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
+(async()=>{
+const dom=new JSDOM(fs.readFileSync(path.join(root,'static/index.html'),'utf8'),{url:'http://localhost:8423',runScripts:'outside-only'});
+const w=dom.window,$=id=>w.document.getElementById(id);w.innerWidth=360;
+w.eval(fs.readFileSync(path.join(root,'static/app.js'),'utf8').replace('init().catch(e=>toast(e.message));','')+'\nwindow.s=state;');
+const s=w.s,weights=[1,3,5,10,15,20,35,40,50,100,200,250,300,400,500,600,700,750,800,1000,1200,1500,2000,2500,3000,5000,10000,20000];
+const profiles=weights.map(weight=>({id:'w'+weight,weight_kg:weight,range_weight:weight+' кг'}));
+s.options={profiles,companies:[{id:'A',label:'Компания A'}]};s.calculationCompanies.add('A');
+const data={profiles:profiles.map(p=>({profile:p,items:[{company:'A',comparison_value:Math.max(600,p.weight_kg*10),price:Math.max(600,p.weight_kg*10)}]}))};
+s.matrix=data;w.renderTariffGraph(data);
+let svg=$('rateChart').querySelector('svg');assert.equal(svg.getAttribute('width'),'100%');assert.equal(svg.getAttribute('height'),'250');assert.equal(svg.viewBox?.baseVal?.width||svg.getAttribute('viewBox').split(' ')[2],304);
+assert.equal(svg.querySelectorAll('circle').length,28);assert.ok(svg.querySelectorAll('.graph-x-label').length<=5);assert.match(svg.querySelector('.graph-x-label:last-child').textContent,/20 т/);
+assert.ok([...svg.querySelectorAll('circle')].every(c=>Number(c.getAttribute('cx'))<304));
+assert.match(svg.querySelector('circle title').textContent,/600 ₽$/);
+$('graphUnitSelect').value='per_kg';$('graphUnitSelect').dispatchEvent(new w.Event('change'));
+assert.equal(s.unitMode,'total');assert.equal(w.localStorage.getItem('tariff-graph-unit-v61'),'per_kg');assert.match($('graphExplainer').textContent,/расчётная стоимость/);
+let titles=[...$('rateChart').querySelectorAll('circle title')].map(n=>n.textContent);assert.match(titles[0],/600 ₽\/кг$/);assert.match(titles[2],/120 ₽\/кг$/);assert.match(titles.at(-1),/10 ₽\/кг$/);
+$('heavyRangeFrom').value='10';$('heavyRangeTo').value='22';$('heavyRangeFrom').dispatchEvent(new w.Event('input'));assert.equal($('rateChart').querySelectorAll('circle').length,13);
+$('graphUnitSelect').value='total';$('graphUnitSelect').dispatchEvent(new w.Event('change'));assert.match($('rateChart').querySelector('circle title').textContent,/1\s000 ₽$/);
+Object.defineProperty($('rateChart'),'clientWidth',{value:900,configurable:true});w.dispatchEvent(new w.Event('resize'));await new Promise(r=>setTimeout(r,150));assert.equal($('rateChart').querySelector('svg').getAttribute('height'),'360');assert.match($('rateChart').querySelector('svg').getAttribute('viewBox'),/900 360/);
+data.profiles[10].items[0].price_is_minimum=true;w.renderTariffGraph(data);assert.equal($('rateChart').querySelectorAll('circle').length,12);
+assert.equal($('routeWorkspace').hidden,false);assert.equal($('bulkPanel').hidden,true);for(const id of ['routeOptions','routeStatistics','routeLibraryDetails','selectedWeightDetails'])assert.equal($(id).open,false);
+const css=fs.readFileSync(path.join(root,'static/styles.css'),'utf8');assert.doesNotMatch(css,/min-width:\s*680px/);assert.match(css,/\.graph-scroll\{overflow:hidden/);
+dom.window.close();console.log('PASS: chart units, floor, control weights, mobile fit, no discarded points, resizing, missing values and collapsed manager layout');
+})().catch(e=>{console.error(e);process.exit(1)});

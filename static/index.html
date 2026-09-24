@@ -14,43 +14,24 @@ document.documentElement.dataset.theme = initialTheme;
 document.documentElement.style.colorScheme = initialTheme === 'dark' ? 'dark' : 'only light';
 document.querySelector('meta[name="theme-color"]').content = initialTheme === 'dark' ? '#090a0c' : '#ffffff';
 </script>
-<title>Тарифы — сравнение по маршруту</title>
+<title>Тарифы — большая таблица и прайс-листы</title>
 <link href="/static/favicon.svg" rel="icon" type="image/svg+xml"/>
-<link href="/static/styles.css?v=600" rel="stylesheet"/>
+<link href="/static/styles.css?v=610" rel="stylesheet"/>
 </head>
 <body>
-<div class="app-shell"><aside class="sidebar"><a class="brand" data-open-workspace="route" href="#"><span aria-hidden="true" class="brand-mark">Т</span><span><strong>Тарифы</strong><small>Работа с прайс-листами</small></span></a><nav aria-label="Разделы приложения" class="workspace-nav" role="tablist"><button aria-controls="routeWorkspace" aria-selected="true" class="nav-item active" data-workspace="route" id="routeTab" role="tab" tabindex="0"><span class="nav-number">01</span><span>Один маршрут</span></button><button aria-controls="bulkPanel" aria-selected="false" class="nav-item" data-workspace="bulk" id="bulkOpenButton" role="tab" tabindex="-1"><span class="nav-number">02</span><span>Большая таблица</span></button><button aria-controls="documentsPanel" aria-selected="false" class="nav-item" data-workspace="documents" id="documentsTab" role="tab" tabindex="-1"><span class="nav-number">03</span><span>Прайс-листы</span></button></nav></aside>
-<header class="topbar"><div class="workspace-heading"><p class="eyebrow">Рабочее пространство</p><h1 id="workspaceTitle" tabindex="-1">Один маршрут</h1><p id="workspaceSubtitle">Сравните цены перевозчиков</p></div><div class="top-actions"><div aria-label="Тема оформления" class="theme-selector" role="group"><button aria-pressed="true" class="theme-choice" id="lightThemeButton" type="button">Светлая</button><button aria-pressed="false" class="theme-choice" id="darkThemeButton" type="button">Тёмная</button></div><button hidden="" id="themeButton" type="button">Переключить тему</button><button class="button secondary" id="settingsButton" type="button">Настройки</button></div></header>
-<main class="page"><section aria-labelledby="bulkOpenButton" class="card bulk-card workspace-panel" hidden="" id="bulkPanel" role="tabpanel">
-<div class="section-head bulk-hero"><div><h2 id="bulkTitle">Тарифы по всем маршрутам</h2><p>Соберите Excel из сохранённых цен или обновите их с сайтов.</p></div></div>
-<h3 class="block-title">Состав большой таблицы</h3><div class="filters bulk-filters">
-<label class="field"><span>Какие маршруты проверить</span><select id="bulkScope"><option value="reference">Основные · Москва и СПБ · 254 маршрута</option><option value="extended_reference">Все направления эталона · 318 маршрутов</option><option value="origins">Из выбранных городов</option><option value="all">Все пары городов · длительный сбор</option></select></label>
-<label class="field" hidden="" id="bulkOriginsField"><span>Откуда · можно выбрать несколько</span><select id="bulkOrigins" multiple="" size="6"></select></label>
-<label class="field" hidden="" id="bulkDestinationsField"><span>Куда · пустой выбор означает все города</span><select id="bulkDestinations" multiple="" size="6"></select></label>
-</div>
-<p id="bulkPlan" role="status">Подготавливаю список направлений…</p>
-<div class="company-actions">
-<button class="button secondary" id="bulkSavedButton" type="button">Собрать Excel из сохранённых цен</button><button class="button primary" disabled="" id="bulkStartButton" type="button">Обновить цены онлайн</button>
-<button class="button secondary" hidden="" id="bulkPauseButton" type="button">Остановить загрузку</button>
-<button class="button secondary" hidden="" id="bulkResumeButton" type="button">Продолжить</button>
-<details class="extra-actions"><summary>Другие действия</summary><button class="button secondary" hidden="" id="bulkRetryButton" type="button">Повторить неудачные проверки</button>
-<button class="button secondary" hidden="" id="bulkExportButton" type="button">Обновить файл Excel</button></details>
-<a class="button primary" download="" hidden="" id="bulkDownload">Скачать большую таблицу</a>
-</div><div class="document-fallback"><div><strong>Добавить цены из файлов</strong></div><button class="button secondary" id="bulkDocumentsButton" type="button">Добавить прайс-листы <span id="documentCountBadge"></span></button></div>
-<details class="help-details"><summary>Предыдущие загрузки и продолжение</summary><div id="bulkHistory"></div></details><div aria-live="polite" class="bulk-status" id="bulkStatus" role="status"></div>
-<progress aria-label="Прогресс общего сбора" hidden="" id="bulkProgress" max="100" value="0"></progress><details class="help-details" id="bulkStatistics"><summary>Подробности обновления</summary><p id="bulkDetails"></p></details>
-<details class="coverage-panel help-details" hidden="" id="bulkCoverage"><summary>Заполненность по компаниям</summary><div class="table-wrap" tabindex="0"><table><thead><tr><th>Компания</th><th>Проверено в этом сборе</th><th>Сохранённые</th><th>Из файлов</th><th>Вручную</th><th>Нет цены</th><th>Дополнить</th></tr></thead><tbody id="bulkCoverageRows"></tbody></table></div></details><details hidden="" id="bulkResults"><summary>Последние ответы компаний</summary><div class="company-progress" id="bulkRecent"></div></details>
-<details class="help-details"><summary>Как обновляются данные и работает продолжение?</summary><p>Окно приложения должно оставаться запущенным во время сбора. После перезапуска нажмите «Продолжить». Выбранный документ имеет приоритет для его строк в обоих разделах. Вариант «Автоматически» возвращает онлайн-приоритет. Новый Excel использует общую базу всех загрузок. При остановке весь выбранный список направлений остаётся в отчёте. Скачанный файл сам не обновляется: соберите его снова.</p><p>В приложении подключены 17 компаний и весовые тарифы. Остальные листы эталона и объёмные колонки сохраняют структуру с пустыми ценовыми ячейками. Сбор всех пар городов может занять дни. Более 400 маршрутов выгружаются в несколько Excel-файлов внутри ZIP. Если цена никогда не была получена, ячейка остаётся пустой; причина указана в источниках. При неудачном обновлении сохраняется прежняя цена с исходной датой.</p></details></section><div aria-labelledby="routeTab" class="workspace-panel route-workspace" id="routeWorkspace" role="tabpanel">
+<div class="app-shell"><aside class="sidebar"><a class="brand" data-open-workspace="route" href="#"><span aria-hidden="true" class="brand-mark">Т</span><span><strong>Тарифы</strong><small>Работа с прайс-листами</small></span></a><nav aria-label="Разделы приложения" class="workspace-nav" role="tablist"><button aria-controls="routeWorkspace" aria-selected="true" class="nav-item active" data-workspace="route" id="routeTab" role="tab"><span class="nav-number">01</span><span>Один маршрут</span></button><button aria-controls="bulkPanel" aria-selected="false" class="nav-item" data-workspace="bulk" id="bulkOpenButton" role="tab"><span class="nav-number">02</span><span>Большая таблица</span></button><button aria-controls="documentsPanel" aria-selected="false" class="nav-item" data-workspace="documents" id="documentsTab" role="tab"><span class="nav-number">03</span><span>Прайс-листы</span></button></nav></aside>
+<header class="topbar"><div class="workspace-heading"><p class="eyebrow">Рабочее пространство</p><h1 id="workspaceTitle" tabindex="-1">Один маршрут</h1><p id="workspaceSubtitle">Сравнение компаний и отдельный Excel</p></div><div class="top-actions"><div aria-label="Тема оформления" class="theme-selector" role="group"><button aria-pressed="true" class="theme-choice" id="lightThemeButton" type="button">Светлая</button><button aria-pressed="false" class="theme-choice" id="darkThemeButton" type="button">Тёмная</button></div><button hidden="" id="themeButton" type="button">Переключить тему</button><button class="button secondary" id="settingsButton" type="button">Настройки</button></div></header>
+<main class="page"><div aria-labelledby="routeTab" class="workspace-panel route-workspace" id="routeWorkspace" role="tabpanel">
 <section class="card controls-card">
 <div class="section-head">
 <div>
-
-<h2>Маршрут</h2>
+<div class="eyebrow">Параметры</div>
+<h2>Какой маршрут сравнить?</h2>
 
 </div>
 <div class="timestamp" id="updatedAt">—</div>
 </div>
-<div class="filters route-filters">
+<div class="filters">
 <label class="field"><span>Откуда</span><select id="originSelect"></select></label>
 <label class="field"><span>Куда</span><select id="destinationSelect"></select></label>
 <button class="button secondary route-swap-button" id="swapRouteButton" title="Поменять направление" type="button">⇄ Поменять направление</button>
@@ -58,20 +39,16 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 
 
 <button class="button primary compare-button" hidden="" id="compareButton" type="button">Сравнить</button>
-</div>
-<details class="company-panel" id="routeOptions">
-<summary>Компании и настройки <span class="selection-message" id="calculationSelectionMessage"></span></summary>
+</div><details class="help-details" id="routeOptions"><summary>Настройки сравнения</summary><div class="filters"><label class="field range-field"><span>Диапазон</span><select id="profileSelect"></select></label><label class="confirmation"><input id="extendedRoutesToggle" type="checkbox"/><span>Все города и другие отправления</span></label><label class="field unit-mode-field"><span>Показывать</span><select aria-describedby="unitModeNote" id="unitModeSelect"><option value="total">За отправку · ₽</option><option value="per_kg">За килограмм · ₽/кг</option></select></label><p class="unit-mode-note" id="unitModeNote" role="status"></p><label class="field"><span>Источники цен</span><select id="liveModeSelect"><option value="all">Последние цены · онлайн, файлы и сохранённые</option><option value="mixed">Только свежие онлайн + мои документы</option><option value="live">Только свежие онлайн · LIVE</option></select></label></div></details>
+<details class="company-panel">
+<summary>Компании для расчёта <span class="selection-message" id="calculationSelectionMessage"></span></summary>
 <div class="company-actions">
 <button class="text-button" id="selectAllCompaniesButton" type="button">Выбрать все</button>
 <button class="text-button" id="clearCompaniesButton" type="button">Снять все</button>
 </div>
 <div class="company-selector" id="calculationCompanySelector"></div>
-<div class="route-extra-filters"><label class="confirmation"><input id="extendedRoutesToggle" type="checkbox"/><span>Все города и другие отправления</span></label><label class="field"><span>Какие цены показывать</span><select id="liveModeSelect"><option value="all">Все сохранённые цены</option><option value="mixed">Свежие онлайн и файлы</option><option value="live">Только свежие онлайн</option></select></label></div></details>
-<div class="route-actions"><button class="button secondary" id="collectButton" type="button">Обновить маршрут</button><button class="button secondary" hidden="" id="routeStopButton" type="button">Остановить загрузку</button><button class="button secondary" id="importButton" type="button">Добавить прайс</button><button class="button primary" id="exportButton" title="Отдельный файл XLSX: выбранный маршрут, все весовые диапазоны и выбранные компании." type="button">Скачать Excel маршрута</button></div><div aria-live="polite" class="route-load-status" hidden="" id="routeLoadStatus" role="status"></div></section><div aria-live="polite" class="applied-feedback" hidden="" id="appliedFileFeedback" role="status"></div>
-
-
-
-
+</details>
+<div class="route-actions"><button class="button secondary" id="collectButton" type="button">Обновить маршрут</button><button class="button secondary" hidden="" id="routeStopButton" type="button">Остановить загрузку</button><button class="button secondary" id="importButton" type="button">Загрузить прайс для маршрута</button><button class="button primary" id="exportButton" title="Отдельный файл XLSX: выбранный маршрут, все весовые диапазоны и выбранные компании." type="button">Скачать Excel маршрута</button></div></section><div aria-live="polite" class="applied-feedback" hidden="" id="appliedFileFeedback" role="status"></div>
 
 
 
@@ -82,43 +59,39 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 <h2>Стоимость по весу</h2>
 <p id="graphDescription">Стоимость отправки, ₽</p>
 </div>
-<label class="graph-scope-field"><span>Масштаб графика</span><select id="graphScopeSelect"><option selected="" value="custom">0–20 тонн · выбрать диапазон</option><option value="small">0–50 кг · за отправку</option><option value="medium">100–1500 кг · ₽ за отправку</option><option value="heavy">1500–5000 кг · ₽ за отправку</option></select></label>
+<div class="graph-controls"><label class="graph-unit-field"><span>Цена на диаграмме</span><select id="graphUnitSelect"><option value="total">За отправку · ₽</option><option value="per_kg">За килограмм · ₽/кг</option></select></label><label class="graph-scope-field"><span>Масштаб графика</span><select id="graphScopeSelect"><option selected="" value="custom">0–20 тонн · выбрать диапазон</option><option value="small">0–50 кг</option><option value="medium">100–1500 кг</option><option value="heavy">1500–5000 кг</option></select></label></div>
 </div>
 <div class="weight-window" id="heavyRangeControls"><div class="section-head compact"><strong>Границы диаграммы</strong><output aria-live="polite" id="heavyRangeLabel">0–20 000 кг</output></div><div class="range-inputs"><label>От<input aria-label="Минимальный вес графика" id="heavyRangeFrom" max="28" min="0" step="1" type="range" value="0"/></label><label>До<input aria-label="Максимальный вес графика" id="heavyRangeTo" max="28" min="0" step="1" type="range" value="28"/></label></div></div>
 <div aria-label="Легенда графика" class="graph-legend" id="graphLegend"></div>
 <div aria-live="polite" class="rate-chart" id="rateChart"></div>
-<details class="help-details"><summary>Как читать диаграмму</summary><p id="graphExplainer">Нажмите на компанию в легенде, чтобы скрыть или вернуть её линию. Нет точки — нет подтверждённой цены. Диаграмма показывает стоимость отправки в рублях.</p></details></section><section class="card matrix-card">
+<details class="help-details"><summary>Как читать диаграмму</summary><p id="graphExplainer"></p></details></section><section class="card matrix-card">
 <div class="section-head compact">
 <div>
-
-<h2>Цены по весу</h2>
-<p id="matrixDescription">Все контрольные веса выбранного маршрута. МИН — минимальная доступная стоимость отправления компании, в рублях.</p>
+<div class="eyebrow">Единый формат</div>
+<h2>Все диапазоны</h2>
+<p>Нажмите на цену или пустую ячейку, чтобы ввести тариф вручную. Он сохранится для этой компании и направления.</p><p id="matrixDescription">Все контрольные веса выбранного маршрута. МИН — минимальная доступная стоимость отправления компании, в рублях.</p>
 </div>
-<label class="field unit-mode-field"><span>Единица цены</span><select aria-describedby="unitModeNote" id="unitModeSelect"><option value="total">За отправку · ₽</option><option value="per_kg">За килограмм · ₽/кг</option></select></label></div>
+</div>
 <div aria-label="Таблица, доступна горизонтальная прокрутка" class="table-wrap matrix-wrap" tabindex="0">
 <table class="matrix-table">
 <thead id="matrixHead"></thead>
 <tbody id="matrixBody"></tbody>
 </table>
 </div>
-<details class="help-details"><summary>О ценах и ручном вводе</summary><p class="unit-mode-note" id="unitModeNote" role="status"></p><p>Нажмите цену или пустую ячейку, чтобы ввести значение вручную. Источник и дата доступны в подсказке ячейки и разделе «Источники цен».</p></details></section><details class="card disclosure-card" id="selectedWeightDetails"><summary>Сравнение на выбранный вес</summary><section class="table-card disclosure-content">
-<div class="section-head compact">
-<div>
+</section>
 
-<h2>Выбранный вес</h2>
-<p id="comparisonDescription">Цена и источник по каждой компании</p>
-</div>
-<label class="field range-field"><span>Вес отправки</span><select id="profileSelect"></select></label></div>
-<div aria-label="Таблица, доступна горизонтальная прокрутка" class="table-wrap" tabindex="0">
-<table class="comparison-table">
-<thead><tr><th>Компания</th><th id="valueHeader">Значение</th><th>Статус</th><th>Источник</th></tr></thead>
-<tbody id="comparisonTable"></tbody>
-</table>
-</div>
-</section></details><details class="card disclosure-card" id="routeLibraryDetails"><summary>Выбрать сохранённый прайс</summary><section aria-labelledby="routeLibraryTitle" class="route-library-card disclosure-content">
-<div class="section-head"><div><h2 id="routeLibraryTitle">Прайсы для этого маршрута</h2><p>Выберите файл компании и нажмите «Применить».</p></div><button class="button secondary" id="routeLibraryButton" type="button">Открыть библиотеку</button></div>
+
+<details class="card sources-card">
+<summary class="sources-summary">
+<div><div class="eyebrow">Контроль источников</div><strong>Показать источники и состояние загрузки</strong></div>
+<span>Онлайн-прайсы и последние сохранённые значения</span>
+</summary>
+<div class="source-help"><p><strong>Как читать источники.</strong> «Обновлено · LIVE» — цена получена при последней успешной проверке, не более 30 минут назад. «Сохранённая цена» — последний успешный результат с указанной датой; он остаётся видимым после простоя. «Не обновилось» — новая попытка не подтвердила цену, показана прежняя. «Файл пользователя» — цена из документа, который вы проверили и сохранили. «Выбранный файл» — назначенный вами документ; его строки имеют приоритет в обоих разделах.</p><p>«Открыть источник» ведёт на сайт компании, «Скачанный прайс» — к исходному документу. Если сайт недоступен, откройте «Прайс-листы», выберите компанию и город отправления, загрузите файл, проверьте предпросмотр и нажмите «Сохранить прайс-лист». Пустая ячейка означает, что подтверждённой цены ещё не было. Перезапуск и смена вкладки не запускают новый сбор.</p></div><div class="integration-grid" id="integrationGrid"></div>
+</details>
+<details class="card manager-details" id="routeLibraryDetails"><summary>Прайсы для этого маршрута</summary><section aria-labelledby="routeLibraryTitle" class="route-library-card">
+<div class="section-head"><div><div class="eyebrow">Общая библиотека</div><h2 id="routeLibraryTitle">Прайсы для этого маршрута</h2><p>Выберите сохранённый документ компании и нажмите «Применить». Цены из выбранного файла используются в сравнении и обеих выгрузках Excel. Для весов, которых в файле нет, остаются доступные онлайн-данные.</p></div><button class="button secondary" id="routeLibraryButton" type="button">Открыть библиотеку</button></div>
 <p aria-live="polite" id="routeDocumentStatus" role="status">Загружаю список подходящих документов…</p><div id="routeDocumentList"></div>
-</section></details><details class="card disclosure-card" id="routeStatistics"><summary>Статистика и состояние загрузки</summary><div class="disclosure-content"><section class="summary-card">
+</section></details><details class="card manager-details" id="routeStatistics"><summary>Статистика и состояние загрузки</summary><section class="summary-card">
 <div class="summary-main">
 <div>
 <div class="eyebrow">Результат</div>
@@ -136,29 +109,56 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 <div class="counter missing"><strong id="missingCount">0</strong><span id="missingLabel">нет строки</span></div>
 </div>
 </div>
-</section><section aria-live="polite" class="live-audit-card" id="liveAuditBanner">
-<div><div class="eyebrow">Проверка LIVE</div><strong id="liveAuditTitle">Состояние обновления</strong></div>
-<p id="liveAuditText">Цены обновляются по кнопке. Подробности по компаниям — ниже.</p>
+</section><section aria-live="polite" class="card live-audit-card" id="liveAuditBanner">
+<div><div class="eyebrow">Проверка LIVE</div><strong id="liveAuditTitle">Подключение к источникам тарифов…</strong></div>
+<p id="liveAuditText">Прайсы загружаются с официальных сайтов. У каждой компании будет показан результат загрузки. LIVE действует 30 минут после успешной проверки; старые цены помечаются LAST GOOD.</p>
 <div class="company-actions">
 <button class="button secondary" hidden="" id="retryFailedButton" type="button">Повторить ошибки</button>
 <button class="text-button" id="diagnosticsButton" type="button">Скачать диагностику</button>
 </div>
 <details><summary>Состояние компаний</summary><div class="company-progress" id="companyProgress"></div></details>
-</section></div></details><details class="card sources-card">
-<summary class="sources-summary">
-<div><strong>Источники цен</strong></div>
-
-</summary>
-<div class="source-help"><p><strong>Как читать источники.</strong> «Обновлено · LIVE» — цена получена при последней успешной проверке, не более 30 минут назад. «Сохранённая цена» — последний успешный результат с указанной датой; он остаётся видимым после простоя. «Не обновилось» — новая попытка не подтвердила цену, показана прежняя. «Файл пользователя» — цена из документа, который вы проверили и сохранили. «Выбранный файл» — назначенный вами документ; его строки имеют приоритет в обоих разделах.</p><p>«Открыть источник» ведёт на сайт компании, «Скачанный прайс» — к исходному документу. Если сайт недоступен, откройте «Прайс-листы», выберите компанию и город отправления, загрузите файл, проверьте предпросмотр и нажмите «Сохранить прайс-лист». Пустая ячейка означает, что подтверждённой цены ещё не было. Перезапуск и смена вкладки не запускают новый сбор.</p></div><div class="integration-grid" id="integrationGrid"></div>
-</details></div><section aria-labelledby="documentsTab" class="workspace-panel" hidden="" id="documentsPanel" role="tabpanel">
-<div class="card"><div class="section-head"><div><h2>Библиотека прайс-листов</h2><p>Выберите компанию и загрузите её прайс-листы.</p></div><span class="format-badge">PDF · XLSX · XLS · CSV · ZIP</span></div>
-<div class="document-fields"><label class="field"><span>Компания</span><select id="documentCompany"></select></label><label class="field"><span>Откуда</span><select id="documentOrigin"><option value="">Определить из файла</option></select></label><label class="field"><span>Дата тарифов · если известна</span><input id="documentDate" type="date"/></label></div>
+</section></details><details class="card manager-details" id="selectedWeightDetails"><summary>Выбранный вес: цены и источники</summary><section class="table-card">
+<div class="section-head compact">
+<div>
+<div class="eyebrow">Выбранный диапазон</div>
+<h2>Сравнение тарифов</h2>
+<p id="comparisonDescription">Сравните стоимость отправки. Источник и время проверки указаны у каждой компании.</p>
+</div>
+</div>
+<div aria-label="Таблица, доступна горизонтальная прокрутка" class="table-wrap" tabindex="0">
+<table class="comparison-table">
+<thead><tr><th>Компания</th><th id="valueHeader">Значение</th><th>Статус</th><th>Источник</th></tr></thead>
+<tbody id="comparisonTable"></tbody>
+</table>
+</div>
+</section></details></div><section aria-labelledby="bulkOpenButton" class="card bulk-card workspace-panel" hidden="" id="bulkPanel" role="tabpanel">
+<div class="section-head bulk-hero"><div><p class="eyebrow">Основной отчёт</p><h2 id="bulkTitle">Большая таблица</h2><p>Скачайте Excel из сохранённых цен или обновите их онлайн.</p></div><span class="format-badge">XLSX · формат эталона</span></div>
+<h3 class="block-title">Состав большой таблицы</h3><div class="filters bulk-filters">
+<label class="field"><span>Какие маршруты проверить</span><select id="bulkScope"><option value="reference">Основные · Москва и СПБ · 254 маршрута</option><option value="extended_reference">Все направления эталона · 318 маршрутов</option><option value="origins">Из выбранных городов</option><option value="all">Все пары городов · длительный сбор</option></select></label>
+<label class="field" hidden="" id="bulkOriginsField"><span>Откуда · можно выбрать несколько</span><select id="bulkOrigins" multiple="" size="6"></select></label>
+<label class="field" hidden="" id="bulkDestinationsField"><span>Куда · пустой выбор означает все города</span><select id="bulkDestinations" multiple="" size="6"></select></label>
+</div>
+<p id="bulkPlan" role="status">Подготавливаю список направлений…</p>
+<div class="company-actions">
+<button class="button secondary" id="bulkSavedButton" type="button">Собрать Excel из сохранённых цен</button><button class="button primary" disabled="" id="bulkStartButton" type="button">Обновить цены онлайн</button>
+<button class="button secondary" hidden="" id="bulkPauseButton" type="button">Остановить загрузку</button>
+<button class="button secondary" hidden="" id="bulkResumeButton" type="button">Продолжить</button>
+<details class="extra-actions"><summary>Другие действия</summary><button class="button secondary" hidden="" id="bulkRetryButton" type="button">Повторить неудачные проверки</button>
+<button class="button secondary" hidden="" id="bulkExportButton" type="button">Обновить файл Excel</button></details>
+<a class="button primary" download="" hidden="" id="bulkDownload">Скачать большую таблицу</a>
+</div><div class="document-fallback"><div><strong>Не хватает онлайн-цен?</strong><p>Загрузите прайс компании. Распознанные маршруты появятся в большой таблице.</p></div><button class="button secondary" id="bulkDocumentsButton" type="button">Добавить прайс-листы <span id="documentCountBadge"></span></button></div>
+<details class="help-details"><summary>Предыдущие загрузки и продолжение</summary><div id="bulkHistory"></div></details><div aria-live="polite" class="bulk-status" id="bulkStatus" role="status"></div>
+<progress aria-label="Прогресс общего сбора" hidden="" id="bulkProgress" max="100" value="0"></progress>
+<details class="coverage-panel" hidden="" id="bulkCoverage"><summary>Чем заполнена большая таблица</summary><p>Количество цен по контрольным весам, без строки МИН. Добавьте прайс компании, чтобы заполнить пропуски.</p><div class="table-wrap" tabindex="0"><table><thead><tr><th>Компания</th><th>Проверено в этом сборе</th><th>Сохранённые</th><th>Из файлов</th><th>Вручную</th><th>Нет цены</th><th>Дополнить</th></tr></thead><tbody id="bulkCoverageRows"></tbody></table></div></details><details hidden="" id="bulkResults"><summary>Последние ответы компаний</summary><div class="company-progress" id="bulkRecent"></div></details>
+<details class="help-details"><summary>Как обновляются данные и работает продолжение?</summary><p>Окно приложения должно оставаться запущенным во время сбора. После перезапуска нажмите «Продолжить». Выбранный документ имеет приоритет для его строк в обоих разделах. Вариант «Автоматически» возвращает онлайн-приоритет. Новый Excel использует общую базу всех загрузок. При остановке весь выбранный список направлений остаётся в отчёте. Скачанный файл сам не обновляется: соберите его снова.</p><p>В приложении подключены 17 компаний и весовые тарифы. Остальные листы эталона и объёмные колонки сохраняют структуру с пустыми ценовыми ячейками. Сбор всех пар городов может занять дни. Более 400 маршрутов выгружаются в несколько Excel-файлов внутри ZIP. Если цена никогда не была получена, ячейка остаётся пустой; причина указана в источниках. При неудачном обновлении сохраняется прежняя цена с исходной датой.</p></details></section><section aria-labelledby="documentsTab" class="workspace-panel" hidden="" id="documentsPanel" role="tabpanel">
+<div class="card"><div class="section-head"><div><p class="eyebrow">Общие документы для всех расчётов</p><h2>Библиотека прайс-листов</h2><p>Загрузите один или несколько документов одной компании. Они могут содержать много маршрутов и дополнять друг друга. Проверьте распознанные цены и сохраните их — они станут источником цен распознанных направлений в «Одном маршруте» и большой таблице.</p></div><span class="format-badge">PDF · XLSX · XLS · CSV · ZIP</span></div>
+<p class="dellin-help"><strong>Прайс ДЛ из Москвы:</strong> на странице «Документы» ДЛ выберите Москву в строке «Автодоставка грузов в регионы из города» и скачайте PDF. В приложении выберите «ДЛ» и «Москва», загрузите файл, нажмите «Распознать маршруты и цены», проверьте и сохраните. Имя <code>pricelist.pdf'</code> исправляется автоматически; переименовывать файл не нужно. Подходит текстовый PDF или скан с первой таблицей «Тарифы на межтерминальную перевозку из …». Для прайса из Санкт-Петербурга выберите Санкт-Петербург или «Определить из файла».</p><div class="storage-info"><p id="storageInfo">Прайсы хранятся бессрочно на сервере приложения (при локальном запуске — на вашем компьютере). «Отключить» убирает цены из расчётов, но сохраняет оригинал. Неподтверждённый предпросмотр действует 30 минут.</p><a class="button secondary" href="/api/storage/backup">Скачать резервную копию прайсов</a></div><div class="document-fields"><label class="field"><span>Компания</span><select id="documentCompany"></select></label><label class="field"><span>Откуда</span><select id="documentOrigin"><option value="">Определить из файла</option></select></label><label class="field"><span>Дата тарифов · если известна</span><input id="documentDate" type="date"/></label></div>
 <label class="upload-area" id="documentDropzone"><span aria-hidden="true" class="upload-icon">↑</span><strong>Выберите один или несколько прайс-листов</strong><span>или перетащите файлы сюда · до 30 файлов, всего до 20 МБ</span><input id="documentFile" multiple="" type="file"/><small id="documentFileName">PDF, включая скан ДЛ, Excel, CSV или архив с документами</small></label>
 <div class="company-actions"><button class="button primary" id="documentParseButton" type="button">Распознать маршруты и цены</button><details class="extra-actions"><summary>Шаблоны для других форматов</summary><button class="button secondary" id="documentWorkbookButton" type="button">XLSX · диапазоны и ставки</button><button class="text-button" id="documentPointsButton" type="button">Контрольные веса · прежний шаблон</button><button class="text-button" id="documentTemplateButton" type="button">Скачать CSV-шаблон</button></details></div>
 <div aria-live="polite" class="form-message" id="documentMessage" role="status"></div><progress hidden="" id="documentProgress" max="100" value="0"></progress>
-<details class="help-details"><summary>Поддерживаемые документы и подсказка компании</summary><div id="documentGuide"></div><p>Нативные прайсы Werner (Excel), ДЛ, Возовоза, КИТ, Новой Линии, ПЭК, Фортуны, ЭкспедицииПлюс и РейлКонтинента; единый шаблон Excel/CSV — для всех компаний. Для общего PDF нужны компания, направление и таблица веса и стоимости. Сканы межтерминальных прайсов ДЛ распознаются через OCR, включая повёрнутые страницы. Распознавание может занять несколько минут. Перед сохранением сверяйте цены с оригиналом. Для сканов других макетов используйте текстовый PDF или XLSX · диапазоны и ставки. В шаблоне диапазонов укажите границы из оригинала и единицу: руб или руб/кг. Нижняя граница не включается, верхняя включается. В Excel эталона до 50 кг и МИН записываются суммы отправки, от 100 кг — ставки из прайса. На экране единицы выбираются переключателем. Общая строка использует свой верхний контрольный вес. Неоднозначные цены не угадываются.</p></details><details class="help-details"><summary>Помощь: форматы файлов и прайс ДЛ</summary><p class="dellin-help"><strong>Прайс ДЛ из Москвы:</strong> на странице «Документы» ДЛ выберите Москву в строке «Автодоставка грузов в регионы из города» и скачайте PDF. В приложении выберите «ДЛ» и «Москва», загрузите файл, нажмите «Распознать маршруты и цены», проверьте и сохраните. Имя <code>pricelist.pdf'</code> исправляется автоматически; переименовывать файл не нужно. Подходит текстовый PDF или скан с первой таблицей «Тарифы на межтерминальную перевозку из …». Для прайса из Санкт-Петербурга выберите Санкт-Петербург или «Определить из файла».</p></details><details class="help-details"><summary>Хранение и резервная копия</summary><div class="storage-info"><p id="storageInfo">Прайсы хранятся бессрочно на сервере приложения (при локальном запуске — на вашем компьютере). «Отключить» убирает цены из расчётов, но сохраняет оригинал. Неподтверждённый предпросмотр действует 30 минут.</p><a class="button secondary" href="/api/storage/backup">Скачать резервную копию прайсов</a></div></details></div>
+<details class="help-details"><summary>Поддерживаемые документы и подсказка компании</summary><div id="documentGuide"></div><p>Нативные прайсы Werner (Excel), ДЛ, Возовоза, КИТ, Новой Линии, ПЭК, Фортуны, ЭкспедицииПлюс и РейлКонтинента; единый шаблон Excel/CSV — для всех компаний. Для общего PDF нужны компания, направление и таблица веса и стоимости. Сканы межтерминальных прайсов ДЛ распознаются через OCR, включая повёрнутые страницы. Распознавание может занять несколько минут. Перед сохранением сверяйте цены с оригиналом. Для сканов других макетов используйте текстовый PDF или XLSX · диапазоны и ставки. В шаблоне диапазонов укажите границы из оригинала и единицу: руб или руб/кг. Нижняя граница не включается, верхняя включается. В Excel эталона до 50 кг и МИН записываются суммы отправки, от 100 кг — ставки из прайса. На экране единицы выбираются переключателем. Общая строка использует свой верхний контрольный вес. Неоднозначные цены не угадываются.</p></details></div>
 <div class="card" hidden="" id="documentPreview"><div class="section-head"><div><p class="eyebrow">Проверка перед сохранением</p><h2 id="documentPreviewTitle">Распознанные цены</h2><p id="documentPreviewSummary"></p></div></div><ul class="notice-list" id="documentWarnings"></ul><section class="price-conflicts" hidden="" id="documentConflicts"><h3>Выберите актуальные цены</h3><p>В документах указаны разные цены для одного веса и маршрута. Без вашего выбора эти цены не сохранятся.</p><div id="documentConflictChoices"></div></section><label class="field"><span>Посмотреть маршрут</span><select id="documentRoutePreview"></select></label><div aria-label="Таблица, доступна горизонтальная прокрутка" class="table-wrap" tabindex="0"><table><thead><tr><th>Диапазон</th><th>Тариф для сравнения</th><th>Источник в документе</th></tr></thead><tbody id="documentPriceRows"></tbody></table></div><details class="help-details" hidden="" id="documentSkipped"><summary>Нераспознанные строки и маршруты</summary><div id="documentErrors"></div></details><label class="confirmation"><input id="documentConfirmed" type="checkbox"/><span>Проверил компанию, маршруты, цены и актуальность по оригиналу</span></label><button class="button primary" disabled="" id="documentCommitButton" type="button">Сохранить прайс-лист</button></div>
-<div class="card"><div class="section-head"><div><h2>Сохранённые прайсы</h2><p>Выберите направление из сохранённого файла.</p></div><button class="button secondary" id="documentsExportButton" type="button">К большой таблице</button></div><div class="documents-list" id="documentsList"><p class="empty">Пока нет загруженных прайс-листов</p></div></div></section></main>
+<div class="card"><div class="section-head"><div><h2>Файлы общей библиотеки</h2><p>Здесь доступны загрузки из обоих разделов. Нажмите «Выбрать маршрут из файла», чтобы открыть нужное направление. Новый подтверждённый прайс применяется к его маршрутам; другую версию можно выбрать в «Одном маршруте». После изменения источника пересоберите большую таблицу.</p></div><button class="button secondary" id="documentsExportButton" type="button">К большой таблице</button></div><div class="documents-list" id="documentsList"><p class="empty">Пока нет загруженных прайс-листов</p></div></div></section></main>
 </div>
 <dialog aria-labelledby="importTitle" class="settings-dialog import-dialog" id="importDialog">
 <div class="settings-card">
@@ -170,13 +170,13 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 <label class="field"><span>Компания</span><select id="importCompany"></select></label>
 <label class="field"><span>PDF, Excel, CSV или ZIP · до 20 МБ</span><input id="importFile" type="file"/></label>
 </div>
-
-
+<p>Из файла сохраняются проверенные цены указанной компании и направления. Для распознавания всех маршрутов документа используйте общую библиотеку. После подтверждения файл добавится в общую библиотеку и будет выбран для этого направления в обоих разделах. Для возврата к онлайн-приоритету выберите «Автоматически» в блоке «Прайсы для этого маршрута». Если нет новой онлайн-цены или документа, показывается последнее сохранённое значение с датой.</p>
+<div class="source-block import-company-guide" id="importCompanyGuide"></div>
 <details class="import-help"><summary>Какие документы можно загрузить?</summary>
 <p>Апостроф после расширения, например <code>pricelist.pdf'</code>, исправляется автоматически. Город отправления должен совпадать с заголовком: для прайса «из Санкт-Петербурга» выберите Санкт-Петербург, для московского — Москву. В библиотеке можно оставить автоматическое определение города.</p><p>ДЛ — текстовый PDF или скан с первой таблицей межтерминальных тарифов; Возовоз — Excel или ZIP с листом «Тарифы межтерм.перевозок»; КИТ и Новая Линия — текстовый PDF; Фортуна, ЭкспедицияПлюс, ПЭК и Рейл Континент — XLSX основного прайса.</p>
 <p>Для всех компаний доступен единый XLSX-шаблон. Общий текстовый PDF должен содержать «Компания: …», «Откуда: …», «Куда: …» и таблицу «Вес, кг | Цена, руб» с контрольными весами. Скан межтерминального прайса ДЛ распознаётся автоматически (OCR); страницы можно не поворачивать вручную. Распознавание идёт в фоне: окно можно закрыть. При повторном открытии для того же маршрута приложение проверит готовность. Цены применяются только после вашего подтверждения. До 40 страниц скана, до 10 минут обработки. Другие сканированные макеты требуют XLSX-шаблона. Проверьте цены перед подтверждением.</p>
 <p><a href="https://www.dellin.ru/documents/" rel="noopener" target="_blank">Прайсы ДЛ</a> · <a href="https://vozovoz.ru/tariffs/" rel="noopener" target="_blank">Сформировать прайс Возовоза</a></p>
-<div class="source-block import-company-guide" id="importCompanyGuide"></div></details>
+</details>
 <div class="company-actions">
 <button class="text-button" id="importTemplateButton" type="button">Скачать XLSX-шаблон</button>
 <button class="button primary" id="importPreviewButton" type="button">Распознать и проверить</button>
@@ -185,12 +185,12 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 <button class="text-button" hidden="" id="importRemoveButton" type="button">Отключить файл для этого маршрута</button>
 <div aria-live="polite" class="form-message" id="importMessage" role="status"></div>
 <section hidden="" id="importPreview">
-<details class="help-details"><summary>Источник и условия расчёта</summary><p id="importEvidence"></p></details>
+<p id="importEvidence"></p>
 <ul id="importWarnings"></ul>
 <div aria-label="Таблица, доступна горизонтальная прокрутка" class="table-wrap import-preview-table" tabindex="0"><table class="comparison-table"><thead><tr><th>Диапазон</th><th>Контрольный вес</th><th>Цена отправки</th><th>Ставка / минимум</th></tr></thead><tbody id="importRows"></tbody></table></div>
 <p id="importMissing"></p>
 <label class="auto-refresh-option"><input id="importConfirmed" type="checkbox"/> Проверил компанию, направление, цены и актуальность по оригиналу</label>
-<div class="dialog-actions import-apply-bar"><div aria-atomic="true" aria-live="polite" class="import-apply-feedback" hidden="" id="importApplyFeedback" role="status" tabindex="-1"></div><button class="button primary" disabled="" id="importApplyButton" type="button">Применить цены из файла</button><button class="button secondary" hidden="" id="importDoneButton" type="button">Готово</button></div>
+<div class="dialog-actions import-apply-actions"><div aria-live="polite" class="applied-feedback" hidden="" id="importApplyFeedback" role="status"></div><button class="button primary" disabled="" id="importApplyButton" type="button">Применить цены из файла</button><button class="button secondary" hidden="" id="importDoneButton" type="button">Готово</button></div>
 </section>
 </div>
 </dialog>
@@ -217,7 +217,7 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 </form>
 </dialog>
 <dialog aria-labelledby="manualPriceTitle" class="settings-dialog" id="manualPriceDialog"><form class="settings-card" id="manualPriceForm"><div class="dialog-head"><h2 id="manualPriceTitle">Цена в ячейке</h2><button aria-label="Закрыть" class="icon-button" id="manualPriceClose" type="button">×</button></div><p id="manualPriceContext"></p><p>Ручная цена сохраняется на сервере и используется в обеих выгрузках. Она будет помечена «Введено вручную». Новый применённый файл заменит её, если содержит этот вес.</p><div class="settings-grid"><label class="field"><span>Цена</span><input autocomplete="off" id="manualPriceValue" inputmode="decimal" placeholder="Например, 600 или 14,50" required="" type="text"/></label><label class="field"><span>Единица тарифа</span><select id="manualPriceUnit"><option value="rub">₽ за отправку</option><option value="rub_per_kg">₽/кг</option></select></label></div><p id="manualPriceUnitHelp"></p><div aria-live="polite" class="form-message" id="manualPriceMessage" role="status"></div><div class="dialog-actions"><button class="button secondary" hidden="" id="manualPriceDelete" type="button">Убрать ручную цену</button><button class="button secondary" id="manualPriceCancel" type="button">Отмена</button><button class="button primary" id="manualPriceSave" type="submit">Сохранить цену</button></div></form></dialog><div class="toast" id="toast" role="status"></div>
-<script src="/static/workspace.js?v=600"></script>
-<script src="/static/app.js?v=600"></script>
+<script src="/static/workspace.js?v=610"></script>
+<script src="/static/app.js?v=610"></script>
 </body>
 </html>

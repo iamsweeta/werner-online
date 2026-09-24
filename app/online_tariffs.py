@@ -197,6 +197,62 @@ def parse_workbook(company, raw, origin, destination):
         wb.close()
 
 
+def parse_bsk_route(raw, origin, destination):
+    """Read the official route form, never infer a missing terminal-page row."""
+    soup=BeautifulSoup(raw,'lxml');origin=normalize_city(origin);destination=normalize_city(destination)
+    for ident,city in [('ship_city',origin),('dest_city',destination)]:
+        selected=soup.select('#'+ident+' option[selected]')
+        if len(selected)!=1 or normalize_city(text(selected[0]))!=city:
+            raise ValueError('БСК: ответ не подтвердил выбранные города')
+    matches=[]
+    for heading in soup.select('h4'):
+        if not text(heading).startswith('Тарифы на грузоперевозки маршрута'):continue
+        direction=[normalize_city(x.strip()) for x in re.split(r'→+',text(heading.find('strong'))) if x.strip()]
+        if direction==[origin,destination]:matches.append(heading)
+    if not matches:raise UnpublishedTariff('БСК: раздел тарифов не опубликовал выбранный маршрут')
+    if len(matches)!=1:raise ValueError('БСК: несколько тарифов для выбранного маршрута; требуется проверка')
+    heading=matches[0];table=heading.parent.find('table')
+    if table is None:raise ValueError('БСК: нет таблицы выбранного маршрута')
+    groups=table.select('thead tr');body=table.select('tbody tr')
+    if len(groups)!=2 or len(body)!=1:raise ValueError('БСК: изменилась структура тарифной таблицы')
+    top=groups[0].find_all(['th','td'],recursive=False)
+    headers=groups[1].find_all(['th','td'],recursive=False)
+    cells=body[0].find_all(['th','td'],recursive=False)
+    if len(top)!=5 or 'мин. стоимость' not in text(top[1]) or re.sub(r'\s+','',text(top[2]))!='стоимостьза1кг₽':
+        raise ValueError('БСК: весовые колонки и валюта не подтверждены')
+    count=int(top[2].get('colspan',0));volume_count=int(top[3].get('colspan',0))
+    if count<1 or len(headers)!=count+volume_count or len(cells)!=3+count+volume_count:
+        raise ValueError('БСК: число цен не совпадает с заголовками')
+    def price(cell):
+        value=text(cell).replace('\xa0','').replace(' ','')
+        # The route page uses English thousands groups, e.g. 1,234.50.
+        if re.fullmatch(r'\d{1,3}(?:,\d{3})+\.\d{2}',value):value=value.replace(',','')
+        return number(value)
+    tiers=[];previous=0
+    for h,c in zip(headers[:count],cells[2:2+count]):
+        label=text(h)
+        if not re.fullmatch(r'До\s+[\d\s]+\s*кг',label,re.I):raise ValueError('БСК: весовой заголовок не распознан')
+        high=bounds(label)[1]
+        if high<=previous:raise ValueError('БСК: неверный порядок весовых диапазонов')
+        value=None if text(c) in {'','-','—','–'} else price(c)
+        tiers.append((previous,high,value));previous=high
+    # Parcel is a separate product with its own volume restriction; use the
+    # published cargo minimum, as in the other carrier comparisons.
+    values=values_from_tiers(tiers,minimum=price(cells[1]))
+    jumps=[(lo,hi,rate) for (prev_lo,prev_hi,prev_rate),(lo,hi,rate) in zip(tiers,tiers[1:]) if prev_rate and rate and rate>prev_rate*10]
+    if jumps:
+        for profile in COMMON_PROFILES:
+            weight=profile['weight_kg']
+            for lo,hi,rate in jumps:
+                if not profile.get('is_minimum_profile') and lo<weight<=hi and profile['id'] in values:
+                    values[profile['id']]['calculation_basis']=f'Проверьте у БСК: источник публикует резкий рост ставки до {rate:g} ₽/кг для {lo:g}–{hi:g} кг. Значение прочитано буквально, без исправления или подстановки.'
+    note='Опубликованный весовой тариф БСК; max(минимальная плата, вес × ставка). Бандероль, объём и допуслуги не включены.'
+    if '→→' in text(heading):
+        via=text(heading) if not heading.get('title') else heading['title'].strip()
+        note+=' Источник указал составной маршрут; пометка: '+via+'.'
+    return values,{'calculation_basis':note,'route_verified':True}
+
+
 def parse_bsk(raw, origin, destination):
     soup = BeautifulSoup(raw, 'lxml')
     # The terminal page carries outbound tariffs in its single tariff table.
@@ -385,6 +441,10 @@ def collect(company, origin, destination, profile_id="w100"):
         url=discover_price_link(raw,page,company)
         raw,meta=fetch(company,origin,destination,url,'XLSX',page,prefer_ranges=(company=='Фортуна'))
         vals=parse_workbook(company,raw,origin,destination)
+    elif company=='БСК':
+        url=carrier_catalogs.bsk_route_url(origin,destination)
+        raw,meta=fetch(company,origin,destination,url,'HTML','https://123789.ru/prices')
+        vals,details=parse_bsk_route(raw,origin,destination);meta.update(details)
     elif company=='Мейджик':
         if {origin,destination}!={'Москва','Санкт-Петербург'}:carrier_catalogs.magic_cities(origin,destination)
         url='https://magic-trans.ru/include/mt-cost-traffic.php?'+urlencode({'cityFrom':origin,'cityTo':destination})

@@ -148,15 +148,15 @@ def select_document(company,origin,destination,document_id=None):
             conn.execute('DELETE FROM excluded WHERE company=? AND origin=? AND destination=?',(company,origin,destination))
         from .document_imports import bump_revision
         bump_revision()
-        count=0;filename=None;cleared=0
-        if document_id:
-            with db() as conn:
-                profiles=[r[0] for r in conn.execute('SELECT profile FROM prices WHERE file=? AND origin=? AND destination=?',(document_id,origin,destination))]
-                metadata=conn.execute('SELECT meta FROM files WHERE id=?',(document_id,)).fetchone()
-            filename=json.loads(metadata['meta']).get('original_filename');count=len(profiles)
-            from .manual_prices import clear_covered
-            cleared=clear_covered(company,origin,destination,profiles)
-        return {'ok':True,'company':company,'origin':origin,'destination':destination,'document_id':document_id,'filename':filename,'applied_prices':count,'replaced_manual':cleared,'applied_at':e._now()}
+    count=0;filename=None;cleared=0
+    if document_id:
+        with db() as conn:
+            profiles=[r[0] for r in conn.execute('SELECT profile FROM prices WHERE file=? AND origin=? AND destination=?',(document_id,origin,destination))]
+            metadata=conn.execute('SELECT meta FROM files WHERE id=?',(document_id,)).fetchone()
+        filename=json.loads(metadata['meta']).get('original_filename');count=len(profiles)
+        from .manual_prices import clear_covered
+        cleared=clear_covered(company,origin,destination,profiles)
+    return {'ok':True,'company':company,'origin':origin,'destination':destination,'document_id':document_id,'filename':filename,'applied_prices':count,'replaced_manual':cleared,'applied_at':e._now()}
 
 
 def disable_route(company,origin,destination):

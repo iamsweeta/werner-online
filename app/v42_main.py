@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="60.0"
+VERSION="61.0"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
@@ -498,7 +498,7 @@ def diagnostics(origin:str="Санкт-Петербург",destination:str="Мо
 def diagnostics_download(origin:str='Санкт-Петербург',destination:str='Москва',profile:str='w100'):
     report=diagnostics(origin,destination,profile)
     return Response(json.dumps(report,ensure_ascii=False,indent=2).encode('utf-8'),media_type='application/json',
-                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_60_0.json"'})
+                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_55_0.json"'})
 
 
 @app.get("/api/settings")

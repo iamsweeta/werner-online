@@ -106,3 +106,16 @@ def kit_pdf_origin(origin,pdf):
         if heading and heading.get_text(' ',strip=True)=='Контакты в г. Краснодар' and address.search(text) and any(address.search(p) for p in primary):
             return terminal
     raise ValueError(f'КИТ: город в PDF ({terminal}) не подтверждён как терминал отправления из {origin}')
+
+
+def bsk_route_url(origin,destination):
+    page='https://123789.ru/prices'
+    soup=BeautifulSoup(catalog_bytes(page),'lxml');params=[]
+    from urllib.parse import urlencode
+    for ident,city in [('ship_city',origin),('dest_city',destination)]:
+        select=soup.select_one('#'+ident)
+        if select is None or select.get('name')!=ident+'[]':
+            raise ValueError('БСК: изменился выбор городов в разделе тарифов')
+        value=exact_id([(x.get('value',''),x.get_text(' ',strip=True)) for x in select.select('option[value]')],city,'БСК')
+        params.append((select['name'],value))
+    return page+'?'+urlencode(params)

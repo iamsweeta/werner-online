@@ -2,8 +2,7 @@
 
 SQLite checkpoints after each carrier. Closing the browser does not interrupt
 the worker. A server restart pauses the job; resume retries only unfinished
-carriers. Exports use shared current prices, confirmed documents and manual cells;
-the original collection checkpoints remain available for audit.
+carriers. Exports combine this job's evidence with confirmed documents for missing cells.
 """
 from __future__ import annotations
 
@@ -376,8 +375,8 @@ class BulkManager:
             coverage={c:{'company':c,'online':0,'saved':0,'document':0,'manual':0,'missing':0} for c in e.COMPANIES}
             for number,part in enumerate(parts,1):
                 index={(r['origin'],r['destination']):r['idx'] for r in part}
-                # Documents share one snapshot per workbook. Source revisions
-                # invalidate the download if any prices change during export.
+                # One version of user documents for the whole workbook. Online
+                # replies are already frozen in this collection's checkpoints.
                 from .document_imports import pack as imported_pack
                 with e.STATE_LOCK:
                     documents={route:imported_pack(*route) for route in index} if info['include_imports'] else {}
@@ -407,7 +406,7 @@ class BulkManager:
                     for file in files:out.write(file,file.name)
                     out.writestr('routes.csv',manifest.getvalue().encode('utf-8-sig'))
                     out.writestr('collection.json',json.dumps(info,ensure_ascii=False,indent=2).encode())
-                    out.writestr('README.txt','Последние доступные онлайн-цены, подтверждённые прайсы и ручные значения из общей базы; данные могут иметь разные даты. Даты и источники — на листе Источники. Для обновления запустите новый общий сбор в приложении. Маршруты перечислены в routes.csv.'.encode('utf-8'))
+                    out.writestr('README.txt','Онлайн-данные на время проверки; пропуски дополнены подтверждёнными прайсами, если включены документы. Даты и источники — на листе Источники. Для обновления запустите новый общий сбор в приложении. Маршруты перечислены в routes.csv.'.encode('utf-8'))
                 temp.replace(output)
             with self.db() as db:
                 config['export_document_revision']=document_revision

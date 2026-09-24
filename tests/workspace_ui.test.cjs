@@ -7,7 +7,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn){for(let i=0;i<400;i++){if(fn())return;await pause(5)}throw Error('UI state timeout');}
 (async()=>{
  const dom=new JSDOM(html,{url:'http://localhost:8423',runScripts:'outside-only'}),w=dom.window,$=id=>w.document.getElementById(id);
- w.AbortController=AbortController;w.localStorage.setItem('tariff-workspace-v48','bulk');const errors=[];w.addEventListener('error',e=>errors.push(e.message));
+ w.AbortController=AbortController;const errors=[];w.addEventListener('error',e=>errors.push(e.message));
  const profiles=[{id:'w100',label:'до 100 кг',weight_kg:100,description:'100 кг',range_weight:'100 кг'}];
  const options={origins:['Москва','Санкт-Петербург','Казань'],destinations:['Москва','Казань'],selected_origin:'Санкт-Петербург',selected_destination:'Москва',companies:[{id:'Werner',label:'Werner'},{id:'ДЛ',label:'ДЛ'}],profiles,integrations:[],integration_status:{},import_guide:{Werner:{page_url:'https://example.invalid/tariffs',instruction:'Скачать прайс компании'}}};
  let job={status:'idle'},files=[],routeCollect=0,starts=[],commits=0,previewPolls=0;
@@ -40,9 +40,7 @@ async function until(fn){for(let i=0;i<400;i++){if(fn())return;await pause(5)}th
   throw Error('Unexpected '+url);
  };
  w.eval(script);await until(()=>!$('bulkStartButton').disabled&&$('documentCompany').options.length===2);
- assert.equal($('bulkPanel').hidden,true);assert.equal($('routeWorkspace').hidden,false);assert.equal($('documentsPanel').hidden,true);
- assert.deepEqual([...w.document.querySelectorAll('[data-workspace]')].map(x=>x.dataset.workspace),['route','bulk','documents']);
- $('bulkOpenButton').click();assert.equal($('bulkPanel').hidden,false);
+ assert.equal($('bulkPanel').hidden,true);assert.equal($('routeWorkspace').hidden,false);assert.equal($('documentsPanel').hidden,true);$('bulkOpenButton').click();
  await pause(25);assert.equal(routeCollect,0,'primary report must not launch hidden route refresh');
  assert.equal(w.document.documentElement.dataset.theme,'light');$('themeButton').click();assert.equal(w.document.documentElement.dataset.theme,'dark');assert.match($('themeButton').textContent,/Светлая/);
  $('themeButton').click();assert.equal(w.document.documentElement.dataset.theme,'light');
@@ -65,8 +63,8 @@ async function until(fn){for(let i=0;i<400;i++){if(fn())return;await pause(5)}th
  assert.equal($('documentsList').querySelector('a').getAttribute('href'),'/api/import-file/'+documentJob.token+'.csv');
  $('routeTab').click();assert.equal($('routeWorkspace').hidden,false);await pause(20);assert.equal(routeCollect,0,'opening the route never starts a collection');
  assert.match(w.exportExcel.toString(),/\/api\/export\/route\?/);
- $('documentsTab').click();$('documentsTab').dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));assert.equal($('routeWorkspace').hidden,false);
- assert.equal($('bulkOpenButton').getAttribute('aria-selected'),'false');assert.equal($('routeTab').getAttribute('aria-selected'),'true');
+ $('documentsTab').click();$('documentsTab').dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));assert.equal($('bulkPanel').hidden,false);
+ assert.equal($('bulkOpenButton').getAttribute('aria-selected'),'true');assert.equal($('routeTab').getAttribute('aria-selected'),'false');
  assert.deepEqual(errors,[]);
  const css=fs.readFileSync(path.join(root,'static/styles.css'),'utf8');assert.match(css,/max-width:\s*520px/);assert.match(css,/prefers-reduced-motion/);assert.match(css,/\[hidden\]/);
  await pause(30);dom.window.close();console.log('PASS: primary workspace, route isolation, light/dark theme, multi-file upload with conflict choices and explicit confirmation, decimal prices, invalidated export, source files, keyboard tabs, responsive rules');

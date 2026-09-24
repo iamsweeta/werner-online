@@ -768,6 +768,16 @@ def _profile_values_from_fresh_documents(company: str, origin: str, destination:
             raise RuntimeError("ДЛ: свежий PDF не найден в текущей попытке")
         return _dellin_values_from_fresh_pdf(pdf,origin,destination)
 
+    if company=="ПЭК":
+        from .pek import parse_route
+        paths=[p for p in fresh_paths if p.suffix.lower()=='.xlsx']
+        if len(paths)!=1:raise ValueError('ПЭК: свежий XLSX не подтверждён')
+        values,details=parse_route(paths[0],origin,destination)
+        evidence=next((f for f in result.get('files',[]) if f.get('file')==paths[0].name),{})
+        return values,{**details,'source_type':'Официальный XLSX ПЭК','source_file':paths[0].name,
+                       'source_url':evidence.get('final_url') or evidence.get('url'),
+                       'sha256':evidence.get('sha256'),'captured_at':datetime.now().astimezone().isoformat(timespec='seconds')}
+
     vals: dict[str,dict[str,Any]]={}
     source_meta: dict[str,Any]={}
     for p in COMMON_PROFILES:
@@ -1233,7 +1243,11 @@ def _refresh_one_document_source(source: dict[str,Any]) -> dict[str,Any]:
             dl=dict(dl); dl["source_id"]=source.get("id"); files.append(dl); status["files"].append(dl["file"])
             path=Path(str(dl.get("path") or ""))
             try:
-                extracted=core.extract_file(path,source); rows.extend(extracted); status["rows_extracted"]+=len(extracted)
+                # PEK's large workbook is parsed once by its strict streaming reader.
+                # Generic extraction copied thousands of unrelated rows into JSON
+                # and then opened the workbook again for the same route.
+                extracted=[] if source.get('id')=='PEK004' else core.extract_file(path,source)
+                rows.extend(extracted); status["rows_extracted"]+=len(extracted)
                 if extracted: status["status"]="parsed"
             except Exception as exc:
                 errors.append({"source_id":source.get("id"),"company":source.get("company"),"stage":"parse","error":str(exc)})

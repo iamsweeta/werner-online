@@ -59,7 +59,7 @@ def backup():
                 for path in sorted((e.RUNTIME_DIR/'manual').glob('*.json')):
                     if path.is_file() and not path.is_symlink():archive.write(path,'manual/'+path.name)
                 archive.writestr('RESTORE.txt','Закройте приложение. Сохраните копию текущей папки runtime/imports. '
-                                 'Замените её целиком папкой imports из этого архива. Также замените runtime/manual папкой manual из архива (если папки нет, удалите старую runtime/manual после сохранения её копии). Запустите приложение и пересоберите Excel.\n'
+                                 'Замените её целиком папкой imports из этого архива. Также замените runtime/manual папкой manual из архива (если папки нет, ручных цен в резервной копии нет). Запустите приложение и пересоберите Excel.\n'
                                  'Подтверждённые документы и история отключений восстанавливаются вместе. Не объединяйте две базы SQLite.\n')
                 archive.writestr('manifest.json',json.dumps({'created_at':e._now(),'type':'user_documents_backup','schema':1},ensure_ascii=False))
         return target
