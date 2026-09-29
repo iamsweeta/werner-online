@@ -103,13 +103,14 @@ def main():
         values={'TARIFF_STORAGE':'cloud','DATABASE_URL':database,
             'S3_ENDPOINT_URL':state['s3_endpoint'],'S3_REGION':state['region'],'S3_BUCKET':bucket,
             'S3_ACCESS_KEY_ID':credential['token_id'],'S3_SECRET_ACCESS_KEY':credential['s3_secret_access_key'],
-            'S3_PREFIX':'tariff-app','APP_USERNAME':'manager','APP_PASSWORD':secrets.token_urlsafe(24),
+            'S3_PREFIX':'tariff-app','APP_USERNAME':'manager','APP_AUTH_MODE':'public','APP_PASSWORD':secrets.token_urlsafe(24),
             'TARIFF_DATA_DIR':'./runtime','PYTHON_VERSION':'3.12.11'}
         fd=os.open(output,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,'w',encoding='utf-8') as out:out.write(env_text(values))
         print('\nГотово: render.env рядом с этой программой.')
         print('Render → ваш сервис → Environment → Add from .env: вставьте содержимое render.env.')
-        print('Логин сайта — manager. Пароль — значение APP_PASSWORD в render.env.')
+        print('Вход свободный: APP_AUTH_MODE=public. Посетителям доступны общие цены, файлы и изменения.')
+        print('Чтобы включить пароль, задайте APP_AUTH_MODE=password. Логин manager, пароль — APP_PASSWORD в render.env.')
         print('render.env содержит секреты. Не загружайте его в GitHub и не отправляйте в чат.')
         print('Служебный Neon API key нигде не записан; после проверки его можно отозвать.')
     finally:session.close()

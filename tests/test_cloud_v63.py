@@ -24,7 +24,7 @@ class CloudStorage(unittest.TestCase):
         cls.env=patch.dict(os.environ,{'TARIFF_STORAGE':'cloud','DATABASE_URL':URL,
             'TARIFF_DATA_DIR':str(cls.directory/'runtime'),'S3_ENDPOINT_URL':'http://127.0.0.1:56366',
             'S3_BUCKET':'tariff-tests','S3_ACCESS_KEY_ID':'testing','S3_SECRET_ACCESS_KEY':'testing',
-            'S3_REGION':'us-east-1','APP_PASSWORD':'test-password-63','APP_USERNAME':'manager'})
+            'S3_REGION':'us-east-1','APP_AUTH_MODE':'password','APP_PASSWORD':'test-password-63','APP_USERNAME':'manager'})
         cls.env.start()
         from app import cloud_db as db,data_store as store,v42_engine as e
         cls.db=db;cls.store=store;cls.e=e
@@ -137,6 +137,20 @@ class CloudStorage(unittest.TestCase):
         with patch.object(self.store,'read_json',side_effect=self.db.StorageUnavailable('База временно недоступна')):
             response=client.get('/api/profile-matrix',params={'origin':'Казань','destination':'Уфа'})
         self.assertEqual(response.status_code,503);self.assertEqual(response.json()['code'],'storage_unavailable')
+
+    def test_public_cloud_without_password_can_use_catalog_and_save_prices(self):
+        from app import v42_main as main,access
+        from fastapi.testclient import TestClient
+        with patch.dict(os.environ, {'APP_AUTH_MODE':'public','APP_PASSWORD':''}):
+            access.validate(cloud=True)
+            client=TestClient(main.app)
+            self.assertEqual(client.get('/').status_code,200)
+            self.assertEqual(client.get('/health').json()['storage_mode'],'cloud')
+            self.assertEqual(client.get('/api/options?include_status=false').status_code,200)
+            response=client.post('/api/manual-price',json={'company':'Werner','origin':'Казань','destination':'Уфа','profile':'w100','value':17,'unit':'rub_per_kg'})
+            self.assertEqual(response.status_code,200,response.text)
+            self.assertEqual(self.e.quote('Werner',*self.route,'w100')['price'],1700)
+            self.assertEqual(client.post('/api/storage/check').status_code,200)
 
     def test_browser_migration_and_completed_marker(self):
         from app import storage,cloud_migration,price_library as lib

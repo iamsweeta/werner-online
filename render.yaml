@@ -28,6 +28,8 @@ services:
         value: tariff-app
       - key: APP_USERNAME
         value: manager
+      - key: APP_AUTH_MODE
+        value: public
       - key: APP_PASSWORD
         generateValue: true
       - key: TARIFF_DATA_DIR

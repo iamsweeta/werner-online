@@ -15,16 +15,29 @@ const state = {
 };
 
 function toast(message){ const n=$('toast'); n.textContent=message; n.classList.add('visible'); clearTimeout(window.__toast); window.__toast=setTimeout(()=>n.classList.remove('visible'),3600); }
+function showConnectionError(error){
+  const panel=$('connectionWarning');if(!panel)return;
+  const auth=error?.status===401;
+  $('connectionWarningTitle').textContent=auth?'Нужно войти на сайт':'Не удалось загрузить данные';
+  $('connectionWarningText').textContent=auth?'На сервере включён пароль. Нажмите «Войти», затем повторите загрузку.':(error?.message||'Проверьте соединение и повторите загрузку.');
+  $('connectionLogin').hidden=!auth;panel.hidden=false;
+}
+function clearConnectionError(){if($('connectionWarning'))$('connectionWarning').hidden=true;}
 async function getJSON(url, options={}){
   const controller=new AbortController();
   const cancel=()=>controller.abort();
   options.signal?.addEventListener('abort',cancel,{once:true});
-  const timer=setTimeout(cancel,options.timeout||20000);
+  if(options.signal?.aborted)cancel();
+  let timedOut=false;
+  const timer=setTimeout(()=>{timedOut=true;cancel();},options.timeout||20000);
   try{
     const r=await fetch(url,{...options,signal:controller.signal,cache:'no-store'});
     const d=await r.json().catch(()=>({}));
-    if(!r.ok){const error=new Error(typeof d.detail==='string'?d.detail:(d.error||`HTTP ${r.status}`));error.status=r.status;throw error;}
+    if(!r.ok){const error=new Error(r.status===401?'На сайте включён вход по паролю.':typeof d.detail==='string'?d.detail:(d.error||`Сервер не смог выполнить запрос (HTTP ${r.status}). Повторите загрузку.`));error.status=r.status;if(r.status===401)showConnectionError(error);throw error;}
     return d;
+  }catch(error){
+    if(timedOut){const failure=new Error('Сервер не ответил вовремя. Повторите загрузку; сохранённые данные не удаляются.');failure.code='request_timeout';throw failure;}
+    throw error;
   }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',cancel);}
 }
 function setBusy(v){ state.busy=v; document.body.classList.toggle('loading',v); $('compareButton').textContent=v?'Считаем…':'Сравнить'; }
@@ -63,7 +76,7 @@ async function loadOptions(origin='Москва',destination=$('destinationSelec
   if(state.optionsController) state.optionsController.abort();
   const controller=new AbortController(); state.optionsController=controller;
   let d;
-  try{ d=await getJSON(`/api/options?${new URLSearchParams({origin,catalog:$('extendedRoutesToggle')?.checked?'all':'main',...(destination?{destination}:{})})}`,{signal:controller.signal}); }
+  try{ d=await getJSON(`/api/options?${new URLSearchParams({origin,catalog:$('extendedRoutesToggle')?.checked?'all':'main',include_status:'false',...(destination?{destination}:{})})}`,{signal:controller.signal}); }
   catch(e){ if(e?.name==='AbortError') return false; throw e; }
   if(seq!==state.optionsSeq) return false;
   state.options=d;
@@ -75,7 +88,18 @@ async function loadOptions(origin='Москва',destination=$('destinationSelec
   $('destinationSelect').innerHTML=d.destinations.map(x=>`<option>${escapeHtml(x)}</option>`).join(''); $('destinationSelect').value=d.selected_destination||d.paired_destination||d.destinations[0]; $('destinationSelect').disabled=state.refreshLocked;
   const oldP=$('profileSelect').value||'w100'; $('profileSelect').innerHTML=d.profiles.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.description)} · ${escapeHtml(p.tariff_type||'Тариф')} · ${escapeHtml(p.unit||'')}</option>`).join(''); $('profileSelect').value=d.profiles.some(p=>p.id===oldP)?oldP:'w100';
   renderCompanySelector(); renderIntegrations(d.integration_status); updateUnitLabels();
+  if(document.querySelector('.sources-card')?.open)loadIntegrationStatus().catch(showConnectionError);
   return true;
+}
+
+async function loadIntegrationStatus(){
+  if(!state.options)return;
+  const seq=state.optionsSeq;
+  const params=new URLSearchParams({origin:$('originSelect').value,destination:$('destinationSelect').value,catalog:$('extendedRoutesToggle')?.checked?'all':'main'});
+  const data=await getJSON('/api/options?'+params);
+  if(seq!==state.optionsSeq)return;
+  state.options.integrations=data.integrations||[];state.options.integration_status=data.integration_status||{};
+  renderIntegrations(state.options.integration_status);
 }
 
 function renderCompanySelector(){
@@ -280,9 +304,10 @@ async function compare(){
     if(seq!==state.compareSeq) return;
     if($('originSelect').value!==origin || $('destinationSelect').value!==destination || $('profileSelect').value!==profile) return;
     renderComparison(cmp); renderMatrix(matrix); renderTariffGraph(matrix);
+    clearConnectionError();
     if(typeof refreshRouteDocuments==='function')refreshRouteDocuments(origin,destination);
   }catch(e){
-    if(e?.name!=='AbortError' && seq===state.compareSeq) toast(e.message||'Ошибка расчёта');
+    if(e?.name!=='AbortError' && seq===state.compareSeq){showConnectionError(e);toast(e.message||'Ошибка расчёта');}
   }finally{
     if(seq===state.compareSeq) setBusy(false);
   }
@@ -650,12 +675,50 @@ function setTheme(next){
   if(state.matrix)renderTariffGraph(state.matrix);
 }
 function toggleTheme(){setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');}
-async function init(){ if(typeof updateThemeButton==='function')updateThemeButton(); state.graphUnitMode=localStorage.getItem('tariff-graph-unit-v61')==='per_kg'?'per_kg':'total'; $('graphUnitSelect').value=state.graphUnitMode; updateGraphUnitLabels(); state.unitMode=localStorage.getItem('tariff-unit-mode-v50')==='per_kg'?'per_kg':'total'; const sourceMode='all'; state.liveOnly=sourceMode!=='all'; state.includeImports=sourceMode!=='live'; if($('unitModeSelect')) $('unitModeSelect').value=state.unitMode; if($('liveModeSelect')) $('liveModeSelect').value=sourceMode; updateUnitLabels(); let route={origin:'Санкт-Петербург',destination:'Москва'}; try{route={...route,...JSON.parse(localStorage.getItem('tariff-route-v44')||'{}')};}catch{} try{await loadOptions(route.origin,route.destination);}catch{await loadOptions('Санкт-Петербург','Москва');} $('profileSelect').value='w100'; await compare(); if(typeof initWorkspace==='function')initWorkspace(); initBulk(); resumeRefresh().catch(e=>toast(e.message)); }
+async function init(){
+  if(state.initializing)return;
+  state.initializing=true;
+  const retry=$('connectionRetry');if(retry)retry.disabled=true;
+  try{
+    if(typeof updateThemeButton==='function')updateThemeButton();
+    try{
+      state.graphUnitMode=localStorage.getItem('tariff-graph-unit-v61')==='per_kg'?'per_kg':'total';
+      state.unitMode=localStorage.getItem('tariff-unit-mode-v50')==='per_kg'?'per_kg':'total';
+    }catch{}
+    $('graphUnitSelect').value=state.graphUnitMode;updateGraphUnitLabels();
+    state.liveOnly=false;state.includeImports=true;
+    if($('unitModeSelect'))$('unitModeSelect').value=state.unitMode;
+    if($('liveModeSelect'))$('liveModeSelect').value='all';
+    updateUnitLabels();
+    let route={origin:'Санкт-Петербург',destination:'Москва'};
+    try{route={...route,...JSON.parse(localStorage.getItem('tariff-route-v44')||'{}')};}catch{}
+    let loaded;
+    try{loaded=await loadOptions(route.origin,route.destination);}
+    catch(error){
+      // Only an obsolete saved city is corrected automatically. Login failures,
+      // timeouts and database errors need visible feedback, not a second request.
+      if(error.status!==400)throw error;
+      loaded=await loadOptions('Санкт-Петербург','Москва');
+    }
+    if(!loaded)return;
+    clearConnectionError();
+    $('profileSelect').value='w100';
+    if(typeof initWorkspace==='function')initWorkspace().catch(showConnectionError);
+    initBulk().catch(showConnectionError);
+    await compare();
+    resumeRefresh().catch(showConnectionError);
+  }catch(error){showConnectionError(error);throw error;}
+  finally{state.initializing=false;if(retry)retry.disabled=false;}
+}
+$('connectionRetry')?.addEventListener('click',()=>{init().catch(showConnectionError);});
+document.querySelector('.sources-card')?.addEventListener('toggle',event=>{
+  if(event.currentTarget.open)loadIntegrationStatus().catch(showConnectionError);
+});
 
 
 async function changeRoute(origin,destination){
   try { if(await loadOptions(origin,destination)){localStorage.setItem('tariff-route-v44',JSON.stringify({origin:$('originSelect').value,destination:$('destinationSelect').value}));await compare();} }
-  catch(e){toast(e.message);}
+  catch(e){showConnectionError(e);toast(e.message);}
 }
 if($('swapRouteButton')) $('swapRouteButton').addEventListener('click',()=>changeRoute($('destinationSelect').value,$('originSelect').value));
 $('originSelect').addEventListener('change',()=>changeRoute($('originSelect').value,$('destinationSelect').value));

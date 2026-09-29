@@ -21,17 +21,16 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="63.0"
+VERSION="63.1"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
 RUNTIME_DIR.mkdir(parents=True,exist_ok=True)
 
-from . import cloud_db,data_store
+from . import cloud_db,data_store,access
+access.validate(cloud_db.enabled())
 if cloud_db.enabled():
     data_store.configuration()
-    if len(os.environ.get('APP_PASSWORD',''))<12:
-        raise RuntimeError('Для облачного сервиса задайте APP_PASSWORD длиной не менее 12 символов в Render Environment.')
     cloud_db.initialize()
     from .route_import_jobs import recover
     recover()
@@ -44,19 +43,19 @@ def storage_guide():
     return FileResponse(STATIC_DIR/'storage-help.html',media_type='text/html')
 @app.middleware('http')
 async def no_cache_ui_and_api(request:Request,call_next):
-    password=os.environ.get('APP_PASSWORD','')
+    password=access.password()
     if password and request.url.path!='/health':
         try:
             scheme,encoded=request.headers.get('authorization','').split(' ',1)
             username,supplied=base64.b64decode(encoded,validate=True).decode('utf-8').split(':',1)
             valid=scheme.lower()=='basic' and secrets.compare_digest(username.encode(),os.environ.get('APP_USERNAME','manager').encode()) and secrets.compare_digest(supplied.encode(),password.encode())
         except (ValueError,UnicodeDecodeError):valid=False
-        if not valid:return Response('Требуется вход',status_code=401,headers={'WWW-Authenticate':'Basic realm="Tariff app", charset="UTF-8"','Cache-Control':'no-store'})
-        if request.method not in {'GET','HEAD','OPTIONS'}:
-            origin=request.headers.get('origin')
-            from urllib.parse import urlsplit
-            if origin and urlsplit(origin).netloc!=request.headers.get('host'):
-                return JSONResponse({'detail':'Запрос с другого сайта отклонён.'},status_code=403)
+        if not valid:return JSONResponse({'detail':'На сайте включён вход по паролю. Войдите и повторите загрузку.','code':'authentication_required'},status_code=401,headers={'WWW-Authenticate':'Basic realm="Tariff app", charset="UTF-8"','Cache-Control':'no-store'})
+    if request.method not in {'GET','HEAD','OPTIONS'}:
+        origin=request.headers.get('origin')
+        from urllib.parse import urlsplit
+        if origin and urlsplit(origin).netloc!=request.headers.get('host'):
+            return JSONResponse({'detail':'Запрос с другого сайта отклонён.'},status_code=403)
     if cloud_db.enabled() and request.method not in {'GET','HEAD','OPTIONS'} and not request.url.path.startswith('/api/storage/'):
         from .cloud_migration import WORKER
         if WORKER and WORKER.is_alive():return JSONResponse({'detail':'Перенос резервной копии выполняется. Дождитесь завершения.'},status_code=409)
@@ -100,17 +99,19 @@ def root():return FileResponse(STATIC_DIR/"index.html",headers={"Cache-Control":
 @app.get("/health")
 def health():
     import hashlib
-    return {"ok":True,"version":VERSION,"installation_id":hashlib.sha256(str(BASE_DIR.resolve()).encode()).hexdigest()[:16],"engine":"v51_verified_sources","cities_count":len(ORIGINS),"route_selection":"any_distinct_catalog_cities","port_hint":PORT,"collect_log":str(LOG_PATH)}
+    return {"ok":True,"version":VERSION,"access_mode":"password" if access.password() else "public","storage_mode":"cloud" if cloud_db.enabled() else "local","installation_id":hashlib.sha256(str(BASE_DIR.resolve()).encode()).hexdigest()[:16],"engine":"v51_verified_sources","cities_count":len(ORIGINS),"route_selection":"any_distinct_catalog_cities","port_hint":PORT,"collect_log":str(LOG_PATH)}
 
 @app.get("/api/options")
-def options(origin:str="Санкт-Петербург",destination:str|None=None,catalog:str="main"):
+def options(origin:str="Санкт-Петербург",destination:str|None=None,catalog:str="main",include_status:bool=True):
     if catalog not in {"main","all"}:raise HTTPException(400,"Неизвестный каталог")
     origin=normalize_city(origin)
     if origin not in ORIGINS:raise HTTPException(400,"Выберите город отправления из списка")
     dest=normalize_city(destination) if destination else paired_destination(origin)
     if dest==origin:dest=paired_destination(origin)
     _validate_route(origin,dest)
-    integrations=[coverage(origin,dest,c) for c in COMPANIES]
+    # The city/company catalog must not wait for hundreds of saved tariff reads.
+    # Detailed source status is requested separately when its panel is opened.
+    integrations=[coverage(origin,dest,c) for c in COMPANIES] if include_status else []
     main=catalog=="main" and origin in MAIN_ORIGINS and dest in main_cities()
     return {"version":VERSION,"catalog":"main" if main else "all","all_origins":ORIGINS,"main_cities":main_cities(),"origins":MAIN_ORIGINS if main else ORIGINS,"destinations":[c for c in (main_cities() if main else ORIGINS) if c!=origin],"selected_origin":origin,"selected_destination":dest,"paired_destination":dest,
             "profiles":COMMON_PROFILES,"companies":[{"id":c,"label":COMPANY_LABELS[c]} for c in COMPANIES],
