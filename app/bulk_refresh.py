@@ -65,8 +65,7 @@ def route_plan(scope='reference', origins=None, destinations=None):
 
 def capture_company(company, origin, destination, result):
     """Freeze the last known prices, keeping failed refreshes visibly distinct."""
-    with e.STATE_LOCK:
-        live=e._live_pack(origin,destination)
+    live=e._live_pack(origin,destination)
     meta=(live.get('companies') or {}).get(company,{})
     aid=meta.get('current_attempt_id')
     clean={'companies':{company:deepcopy(meta)},'profiles':{}}
@@ -304,7 +303,9 @@ class BulkManager:
             stored={r['company']:json.loads(zlib.decompress(r['payload'])) for r in db.execute('SELECT company,payload FROM results WHERE job=? AND idx=?',(ident,idx))}
         by={c:{i['profile_id']:i for i in row['items']} for c,row in stored.items()}
         if current:
-            with e.STATE_LOCK:packs=(e._base_pack(o,d),e._live_pack(o,d),imports or {})
+            from . import cloud_db
+            with (cloud_db.read_transaction() if cloud_db.enabled() else e.STATE_LOCK):
+                packs=(e._base_pack(o,d),e._live_pack(o,d),imports or {})
             output=[]
             for p in e.COMMON_PROFILES:
                 items=[]
@@ -386,8 +387,10 @@ class BulkManager:
                 # Freeze document inputs for this part. Revisions recorded
                 # before export prevent downloading it if data changes mid-run.
                 from .document_imports import pack as imported_pack
-                with e.STATE_LOCK:
-                    documents={route:imported_pack(*route) for route in index} if info['include_imports'] else {}
+                from . import cloud_db,price_library
+                if info['include_imports']:price_library.migrate_legacy()
+                with (cloud_db.read_transaction() if cloud_db.enabled() else e.STATE_LOCK):
+                    documents={route:imported_pack(*route,migrate=False) for route in index} if info['include_imports'] else {}
                 def matrix_for(o,d):
                     rows=self._route_rows(ident,index[(o,d)],o,d,documents.get((o,d)),current=True)
                     for row in rows:

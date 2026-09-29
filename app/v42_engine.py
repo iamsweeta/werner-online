@@ -157,6 +157,22 @@ def _live_pack(origin: str, destination: str) -> dict[str, Any]:
     o,d=route_pair(origin,destination)
     return _read_json(_route_cfg(o,d)["live"], {"schema":3,"route":{"origin":o,"destination":d},"companies":{},"profiles":{}})
 
+
+def route_packs(origin: str, destination: str):
+    """Read all inputs once per route, then calculate every company/weight in RAM."""
+    from . import cloud_db,data_store,manual_prices,document_imports,price_library
+    o,d=route_pair(origin,destination)
+    price_library.migrate_legacy(o,d)
+    if not cloud_db.enabled():
+        with STATE_LOCK:
+            return (_base_pack(o,d),_live_pack(o,d),document_imports.pack(o,d,migrate=False))
+    manual_path=manual_prices.path(o,d);live_path=live_path_for(o,d);legacy_path=document_imports.route_path(o,d)
+    with cloud_db.read_transaction():
+        data=data_store.read_json_many({manual_path:{'profiles':{}},live_path:{'profiles':{},'companies':{}},legacy_path:{'profiles':{},'companies':{}}})
+        base={'profiles':{},'companies':{},'route':{'origin':o,'destination':d},'_manual':data[manual_path]}
+        imports=document_imports.pack(o,d,migrate=False,legacy=data[legacy_path])
+    return base,data[live_path],imports
+
 def _write_live(origin: str, destination: str, live: dict[str, Any]) -> None:
     _robust_json_write(_route_cfg(origin,destination)['live'], live)
 
@@ -199,6 +215,14 @@ def save_live_update(company: str, origin: str, destination: str, profile_values
         raise ValueError('Прайс относится к другому городу отправления')
     if meta.get('destination') and normalize_city(meta['destination']) != normalize_city(destination):
         raise ValueError('Прайс относится к другому городу назначения')
+    from . import data_store
+    prepared=[]
+    if data_store.managed(RUNTIME_DIR):
+        sources={str(v.get('source_file') or '') for v in profile_values.values() if isinstance(v,dict)}|{str(meta.get('source_file') or '')}
+        for name in sources:
+            if name and Path(name).name==name:
+                original=RUNTIME_DIR/'downloads'/name
+                if original.is_file():prepared.append(data_store.prepare_file(original))
     with STATE_LOCK:
         if not attempt_id and not live_company_state(origin,destination,company).get('current_attempt_id'):
             attempt_id=begin_live_attempt(company,origin,destination)
@@ -207,13 +231,7 @@ def save_live_update(company: str, origin: str, destination: str, profile_values
         aid=attempt_id or company_meta.get("current_attempt_id")
         if company_meta.get('current_attempt_id') != aid:
             raise ValueError('Устаревшая попытка обновления: её результат отклонён')
-        from . import data_store
-        if data_store.managed(RUNTIME_DIR):
-            sources={str(v.get('source_file') or '') for v in profile_values.values()}|{str(meta.get('source_file') or '')}
-            for name in sources:
-                if name and Path(name).name==name:
-                    original=RUNTIME_DIR/'downloads'/name
-                    if original.is_file():data_store.store_file(original)
+        for item in prepared:data_store.register_file(item)
         captured_at=str(meta.get("captured_at") or _now())
         # Absence in a new response must not destroy the last successful price.
         # The quote below marks retained rows as unconfirmed, never as LIVE.
@@ -271,7 +289,7 @@ def profile_for_weight(weight: float, is_minimum: bool=False) -> dict[str, Any] 
 def _route_quote(company: str, origin: str, destination: str, profile_id: str, packs=None, *, derive_minimum=True) -> dict[str, Any]:
     o,d=route_pair(origin,destination); p=PROFILE_BY_ID[profile_id]
     from .document_imports import pack as imported_pack
-    base_pack,live,imports=packs if packs is not None else (_base_pack(o,d),_live_pack(o,d),imported_pack(o,d))
+    base_pack,live,imports=packs if packs is not None else route_packs(o,d)
     from . import manual_prices
     manual=(base_pack.get('_manual') if '_manual' in base_pack else manual_prices.pack(o,d))
     base_pack={**base_pack,'_manual':manual}
@@ -400,28 +418,26 @@ def _route_quote(company: str, origin: str, destination: str, profile_id: str, p
     return {**base,"status":"document_unavailable","price":None,"comparison_value":None,"price_is_minimum":False,
             "freshness":"missing","display_text":"прайс не загружен","message":detail}
 
-def quote(company: str, origin: str, destination: str, profile_id: str) -> dict[str, Any]:
+def quote(company: str, origin: str, destination: str, profile_id: str,*,packs=None) -> dict[str, Any]:
     if company not in COMPANIES: raise KeyError(company)
     if profile_id not in PROFILE_BY_ID: raise KeyError(profile_id)
     if not is_supported_route(origin,destination):
         raise ValueError("Выберите два разных города из списка")
-    return _route_quote(company,origin,destination,profile_id)
+    return _route_quote(company,origin,destination,profile_id,packs)
 
-def matrix(origin: str, destination: str, companies: list[str]) -> list[dict[str, Any]]:
-    from .document_imports import pack
-    packs=(_base_pack(origin,destination),_live_pack(origin,destination),pack(origin,destination))
+def matrix(origin: str, destination: str, companies: list[str],*,packs=None) -> list[dict[str, Any]]:
+    if packs is None:packs=route_packs(origin,destination)
     return [{"profile":deepcopy(p),"items":[_route_quote(c,origin,destination,p["id"],packs) for c in companies]} for p in COMMON_PROFILES]
 
-def coverage(origin: str, destination: str, company: str) -> dict[str, Any]:
-    from .document_imports import pack
-    packs=(_base_pack(origin,destination),_live_pack(origin,destination),pack(origin,destination))
+def coverage(origin: str, destination: str, company: str,*,packs=None) -> dict[str, Any]:
+    if packs is None:packs=route_packs(origin,destination)
     items=[_route_quote(company,origin,destination,p["id"],packs) for p in COMMON_PROFILES if not p.get("is_minimum_profile")]
     exact=sum(1 for x in items if tariff_value(x, PROFILE_BY_ID[x["profile_id"]]) is not None)
     live_now=sum(1 for x in items if x.get("online") and (x.get("comparison_value") is not None or (x.get("price_is_minimum") and x.get("price") is not None)))
     live_exact=sum(1 for x in items if x.get("online") and tariff_value(x, PROFILE_BY_ID[x["profile_id"]]) is not None)
     live_lower=sum(1 for x in items if x.get("online") and x.get("price_is_minimum") and x.get("price") is not None)
     lower=sum(1 for x in items if x.get("price_is_minimum") and x.get("price") is not None)
-    first=items[0] if items else {}; state=live_company_state(origin,destination,company)
+    first=items[0] if items else {}; state=packs[1].get('companies',{}).get(company,{})
     label=f"точных {exact}/{len(items)} · LIVE {live_now} (точных {live_exact}, «от» {live_lower})" if exact else (f"есть цена «от» · LIVE {live_lower}" if lower else "нет валидированной строки")
     imported=sum(1 for x in items if x.get('uploaded'))
     if imported:label+=f' · из файла {imported}'

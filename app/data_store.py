@@ -73,6 +73,15 @@ def read_json(path,default):
     return json.loads(row[0]) if row else deepcopy(default)
 
 
+def read_json_many(defaults):
+    """Load the few JSON records belonging to a route in one database round trip."""
+    keys={key(path):path for path in defaults}
+    with db.transaction() as conn:
+        rows=conn.execute('SELECT key,payload FROM tariff_state.json_data WHERE key=ANY(%s)',(list(keys),)).fetchall()
+    values={row[0]:json.loads(row[1]) for row in rows}
+    return {path:values[k] if k in values else deepcopy(defaults[path]) for k,path in keys.items()}
+
+
 def write_json(path,payload):
     with db.transaction() as conn:
         conn.execute('INSERT INTO tariff_state.json_data(key,payload) VALUES (%s,%s) '
@@ -94,25 +103,36 @@ def _hash_file(path):
     return digest.hexdigest()
 
 
-def store_file(path,logical_path=None):
-    """Persist a collector/export file before publishing its reference."""
+def prepare_file(path,logical_path=None):
+    """Upload bytes before acquiring a price writer lock or publishing references."""
     logical_path=logical_path or path
-    if not managed(logical_path):return Path(path)
+    if not managed(logical_path):return None
     path=Path(path);sha=_hash_file(path);size=path.stat().st_size
     object_key=f'{prefix()}/objects/{sha}'
     with db.transaction() as conn:
         existing=conn.execute('SELECT sha256 FROM tariff_state.objects WHERE key=%s',(key(logical_path),)).fetchone()
-        if existing and existing[0]==sha:return path
+    if not existing or existing[0]!=sha:
         s3,bucket=client()
         try:
             with path.open('rb') as body:
                 s3.put_object(Bucket=bucket,Key=object_key,Body=body,ContentLength=size,ContentType='application/octet-stream')
         except Exception as exc:
             raise db.StorageUnavailable('Не удалось сохранить файл в облаке. Проверьте S3-настройки, доступ и свободный объём. Цены из файла не применены.') from exc
+    return (key(logical_path),object_key,sha,size)
+
+
+def register_file(prepared):
+    """Commit the reference with the prices; a failed transaction exposes neither."""
+    if prepared is None:return
+    with db.transaction() as conn:
         conn.execute('INSERT INTO tariff_state.objects(key,object_key,sha256,size) VALUES (%s,%s,%s,%s) '
             'ON CONFLICT(key) DO UPDATE SET object_key=excluded.object_key,sha256=excluded.sha256,size=excluded.size,updated_at=now()',
-            (key(logical_path),object_key,sha,size))
-    return path
+            prepared)
+
+
+def store_file(path,logical_path=None):
+    register_file(prepare_file(path,logical_path))
+    return Path(path)
 
 
 def write_bytes(path,raw):

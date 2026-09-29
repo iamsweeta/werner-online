@@ -101,7 +101,9 @@ def transaction():
         return
     try:
         with pool().connection() as conn:
-            yield conn
+            _local.connection=conn
+            try:yield conn
+            finally:_local.connection=None
     except StorageUnavailable:raise
     except Exception as exc:
         # Programming errors must remain visible in tests/server logs; connection
@@ -111,6 +113,20 @@ def transaction():
         if isinstance(exc,(psycopg.Error,PoolTimeout)):
             raise StorageUnavailable('База данных временно недоступна. Изменения не подтверждены; повторите действие после восстановления подключения.') from exc
         raise
+
+
+@contextmanager
+def read_transaction():
+    """One committed snapshot, without the global writer/advisory lock."""
+    if not enabled():
+        yield None
+        return
+    if getattr(_local,'connection',None) is not None:
+        yield _local.connection
+        return
+    with transaction() as conn:
+        conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        yield conn
 
 
 class StateLock:
@@ -125,7 +141,7 @@ class StateLock:
                 except BaseException:
                     import sys
                     cm.__exit__(*sys.exc_info());raise
-                self.state.context=cm;_local.connection=conn
+                self.state.context=cm
             self.state.depth=depth+1
             return self
         except BaseException:self.lock.release();raise
@@ -133,7 +149,7 @@ class StateLock:
         try:
             self.state.depth-=1
             if self.state.depth==0 and getattr(self.state,'context',None):
-                cm=self.state.context;self.state.context=None;_local.connection=None
+                cm=self.state.context;self.state.context=None
                 return cm.__exit__(*args)
         finally:self.lock.release()
 

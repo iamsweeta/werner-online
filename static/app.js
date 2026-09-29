@@ -290,27 +290,43 @@ async function compare(){
   const destination=$('destinationSelect').value;
   const profile=$('profileSelect').value;
   const companies=[...state.calculationCompanies];
+  const requestKey=JSON.stringify([origin,destination,profile,companies]);
+  if(state.compareRequestKey===requestKey && state.comparePromise)return state.comparePromise;
+  state.compareRequestKey=requestKey;
   const seq=++state.compareSeq;
   if(state.compareController) state.compareController.abort();
   const controller=new AbortController(); state.compareController=controller;
   setBusy(true);
+  const task=(async()=>{
   try{
     const q=new URLSearchParams({origin,destination,profile,companies:companies.join(',')}).toString();
     const mq=new URLSearchParams({origin,destination,companies:companies.join(',')}).toString();
-    const [cmp,matrix]=await Promise.all([
-      getJSON(`/api/compare?${q}`,{signal:controller.signal}),
-      getJSON(`/api/profile-matrix?${mq}`,{signal:controller.signal})
-    ]);
+    let cmp,matrix;
+    if(state.options?.route_view){
+      const view=await getJSON(`/api/route-view?${q}`,{signal:controller.signal});
+      cmp=view.comparison;matrix=view.matrix;
+    }else{
+      [cmp,matrix]=await Promise.all([
+        getJSON(`/api/compare?${q}`,{signal:controller.signal}),
+        getJSON(`/api/profile-matrix?${mq}`,{signal:controller.signal})
+      ]);
+    }
     if(seq!==state.compareSeq) return;
     if($('originSelect').value!==origin || $('destinationSelect').value!==destination || $('profileSelect').value!==profile) return;
     renderComparison(cmp); renderMatrix(matrix); renderTariffGraph(matrix);
     clearConnectionError();
-    if(typeof refreshRouteDocuments==='function')refreshRouteDocuments(origin,destination);
+    const documentKey=JSON.stringify([origin,destination]);
+    if(typeof refreshRouteDocuments==='function' && (state.documentRouteKey!==documentKey || $('routeLibraryDetails')?.open)){
+      state.documentRouteKey=documentKey;refreshRouteDocuments(origin,destination);
+    }
   }catch(e){
     if(e?.name!=='AbortError' && seq===state.compareSeq){showConnectionError(e);toast(e.message||'Ошибка расчёта');}
   }finally{
-    if(seq===state.compareSeq) setBusy(false);
+    if(seq===state.compareSeq){setBusy(false);state.comparePromise=null;state.compareRequestKey=null;}
   }
+  })();
+  state.comparePromise=task;
+  return task;
 }
 function renderJob(job){
   state.lastJob=job;
@@ -347,7 +363,7 @@ async function monitorJob(job){
       const next=Number(d.progress_revision||0);
       if(next!==revision||d.status==='done'||d.status==='error'){
         revision=next;
-        if($('originSelect').value===origin && $('destinationSelect').value===destination){await loadOptions(origin,destination);await compare();}
+        if($('originSelect').value===origin && $('destinationSelect').value===destination)await compare();
       }
       if(!['queued','running'].includes(d.status))break;
       await new Promise(resolve=>setTimeout(resolve,2000));
@@ -376,11 +392,11 @@ async function refreshRouteSources(force=false,onlyCompanies=null){
   finally{if(!state.refreshingRoutes.size)setRefreshRouteLock(false);}
 }
 async function updateSources(){await refreshRouteSources(true);}
-async function resumeRefresh(){
+async function resumeRefresh({compareIdle=true}={}){
   const active=await getJSON('/api/active-collect');
   if(active.mode==='bulk'){await monitorBulk(active.bulk_job_id);return;}
   if(active.status!=='idle'){await loadOptions(active.origin,active.destination);await compare();await monitorJob(active);return;}
-  await compare();
+  if(compareIdle)await compare();
 }
 
 function exportExcel(){ window.location.href=`/api/export/route?${queryString()}`; }
@@ -664,7 +680,7 @@ $('importPreviewButton').addEventListener('click',previewImport);
 $('importApplyButton').addEventListener('click',applyImport);
 $('importRemoveButton').addEventListener('click',removeImport);
 $('importTemplateButton').addEventListener('click',()=>{window.location.href='/api/import/template?'+new URLSearchParams({...importsState.route,company:$('importCompany').value});});
-async function saveSettings(){ const map={dellin_appkey:'dellinAppKey',vozovoz_api_key:'vozovozKey',baikal_api_key:'baikalApiKey',baikal_api_url:'baikalApiUrl'}; const payload={public_browser_enabled:$('browserCalculatorsToggle').checked}; Object.entries(map).forEach(([k,id])=>{const v=$(id).value.trim();if(v)payload[k]=v;}); if(!Object.keys(payload).length){$('settingsMessage').textContent='Введите хотя бы одно значение.';return;} try{await getJSON('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});$('settingsMessage').textContent='Сохранено локально.';setTimeout(closeSettings,500);}catch(e){$('settingsMessage').textContent=e.message;} }
+async function saveSettings(){ const map={dellin_appkey:'dellinAppKey',vozovoz_api_key:'vozovozKey',baikal_api_key:'baikalApiKey',baikal_api_url:'baikalApiUrl'}; const payload={public_browser_enabled:$('browserCalculatorsToggle').checked}; Object.entries(map).forEach(([k,id])=>{const v=$(id).value.trim();if(v)payload[k]=v;}); if(!Object.keys(payload).length){$('settingsMessage').textContent='Введите хотя бы одно значение.';return;} try{await getJSON('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});$('settingsMessage').textContent='Настройки сохранены.';setTimeout(closeSettings,500);}catch(e){$('settingsMessage').textContent=e.message;} }
 function setTheme(next){
   next=next==='dark'?'dark':'light';
   document.documentElement.dataset.theme=next;
@@ -706,7 +722,7 @@ async function init(){
     if(typeof initWorkspace==='function')initWorkspace().catch(showConnectionError);
     initBulk().catch(showConnectionError);
     await compare();
-    resumeRefresh().catch(showConnectionError);
+    resumeRefresh({compareIdle:false}).catch(showConnectionError);
   }catch(error){showConnectionError(error);throw error;}
   finally{state.initializing=false;if(retry)retry.disabled=false;}
 }

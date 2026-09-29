@@ -30,11 +30,11 @@ def route_path(origin, destination):
     return root() / 'routes' / (e._route_cfg(origin,destination)['slug']+'.json')
 
 
-def pack(origin, destination):
+def pack(origin, destination,*,migrate=True,legacy=None):
     origin,destination=e.route_pair(origin,destination)
     from .price_library import pack as multi_pack
-    result=multi_pack(origin,destination)
-    legacy=_legacy_pack(origin,destination)
+    result=multi_pack(origin,destination,migrate=migrate)
+    legacy=_legacy_pack(origin,destination) if legacy is None else legacy
     for rows in legacy.get('profiles',{}).values():
         for company,row in rows.items():legacy.setdefault('companies',{}).setdefault(company,row)
     def order(meta):return (int(meta.get('import_revision',0)),str(meta.get('uploaded_at','')))

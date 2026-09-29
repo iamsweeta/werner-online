@@ -152,6 +152,78 @@ class CloudStorage(unittest.TestCase):
             self.assertEqual(self.e.quote('Werner',*self.route,'w100')['price'],1700)
             self.assertEqual(client.post('/api/storage/check').status_code,200)
 
+    def test_route_view_uses_bounded_queries_under_network_latency(self):
+        import psycopg
+        from fastapi.testclient import TestClient
+        from app import v42_main as main,manual_prices
+        client=TestClient(main.app);client.auth=('manager','test-password-63')
+        manual_prices.put('Werner',*self.route,'w100',17,'rub_per_kg')
+        self.e.route_packs(*self.route)
+        execute=psycopg.Cursor.execute;queries=[]
+        def delayed(cursor,query,*args,**kwargs):
+            queries.append(str(query));time.sleep(.02)
+            return execute(cursor,query,*args,**kwargs)
+        with patch.object(psycopg.Cursor,'execute',delayed):
+            started=time.monotonic()
+            response=client.get('/api/route-view',params={'origin':self.route[0],'destination':self.route[1]})
+            elapsed=time.monotonic()-started
+        self.assertEqual(response.status_code,200,response.text)
+        data=response.json()
+        self.assertEqual(len(data['comparison']['items']),17)
+        self.assertEqual(len(data['matrix']['profiles']),29)
+        self.assertEqual(data['comparison']['items'][0]['price'],1700)
+        self.assertLessEqual(len(queries),8,queries)
+        self.assertLess(elapsed,2.5)
+        self.assertFalse(any('pg_advisory' in q for q in queries))
+        print('ROUTE_VIEW_METRICS',json.dumps({'queries':len(queries),'seconds':round(elapsed,3),'simulated_query_latency_ms':20}))
+        manual_prices.put('Werner',*self.route,'w100',19,'rub_per_kg')
+        updated=client.get('/api/route-view',params={'origin':self.route[0],'destination':self.route[1]}).json()
+        self.assertEqual(updated['comparison']['items'][0]['price'],1900,'no stale process cache after edits')
+
+    def test_slow_original_upload_does_not_block_saved_prices_or_edits(self):
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        from app import manual_prices
+        aid=self.e.begin_live_attempt('Werner',*self.route)
+        self.e.save_live_update('Werner',*self.route,{'w100':{'kind':'exact','price':1000}},{},aid)
+        original=self.e.RUNTIME_DIR/'downloads'/'slow-original.pdf'
+        original.parent.mkdir(parents=True,exist_ok=True);original.write_bytes(b'controlled original')
+        client,_=self.store.client();put=client.put_object
+        entered=threading.Event();release=threading.Event()
+        def delayed(**kwargs):
+            entered.set()
+            if not release.wait(8):raise RuntimeError('test upload wait expired')
+            return put(**kwargs)
+        with ThreadPoolExecutor(max_workers=2) as executor,patch.object(client,'put_object',delayed):
+            upload=executor.submit(self.e.save_live_update,'Werner',*self.route,{'w100':{'kind':'exact','price':2000}}, {'source_file':original.name},aid)
+            try:
+                self.assertTrue(entered.wait(3))
+                def read_and_edit():
+                    before=self.e.quote('Werner',*self.route,'w100')['price']
+                    manual_prices.put('ДЛ',*self.route,'w100',18,'rub_per_kg')
+                    return before
+                self.assertEqual(executor.submit(read_and_edit).result(timeout=3),1000)
+                self.assertIsNone(self.store.metadata(original),'original not published before successful upload')
+            finally:release.set()
+            upload.result(timeout=5)
+        self.assertEqual(self.e.quote('Werner',*self.route,'w100')['price'],2000)
+        self.assertEqual(self.e.quote('ДЛ',*self.route,'w100')['price'],1800)
+        original.unlink()
+        self.assertEqual(self.store.read_bytes(original),b'controlled original')
+
+    def test_nested_database_context_rolls_back_together(self):
+        key=self.e.RUNTIME_DIR/'transaction-test.json'
+        with self.assertRaises(ValueError):
+            with self.db.transaction() as outer:
+                self.store.write_json(key,{'saved':False})
+                with self.db.transaction() as inner:self.assertIs(inner,outer)
+                raise ValueError('rollback')
+        self.assertEqual(self.store.read_json(key,{}),{})
+        with self.db.transaction() as outer:
+            with self.e.STATE_LOCK:self.store.write_json(key,{'saved':True})
+            with self.db.transaction() as inner:self.assertIs(inner,outer)
+        self.assertEqual(self.store.read_json(key,{}),{'saved':True})
+
     def test_browser_migration_and_completed_marker(self):
         from app import storage,cloud_migration,price_library as lib
         from app import v42_main as main

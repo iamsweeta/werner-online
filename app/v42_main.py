@@ -12,7 +12,7 @@ from pydantic import BaseModel,StrictStr,StrictInt,StrictFloat
 
 from .v42_engine import (
     BASE_DIR, RUNTIME_DIR, COMPANIES, COMPANY_LABELS, COMMON_PROFILES, PROFILE_BY_ID,
-    normalize_city, is_supported_route, paired_destination, quote, matrix, coverage,
+    normalize_city, is_supported_route, paired_destination, quote, matrix, coverage,route_packs,
     live_path_for,
     live_company_state, age_seconds, LIVE_TTL_SECONDS,
 )
@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="63.1"
+VERSION="63.2"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
@@ -68,7 +68,7 @@ async def storage_failure(request,exc):
     return JSONResponse({'detail':str(exc),'code':'storage_unavailable'},status_code=503)
 
 ORIGINS=city_names()
-COLLECT_LOCK=threading.RLock(); COLLECT_JOBS:dict[str,dict[str,Any]]={}; EXACT_REVISION=0
+COLLECT_LOCK=threading.RLock(); COLLECT_SAVE_LOCK=threading.Lock(); COLLECT_JOBS:dict[str,dict[str,Any]]={}; EXACT_REVISION=0
 
 from .bulk_refresh import BulkManager, BusyError, route_plan
 BULK=BulkManager(guard=COLLECT_LOCK,route_busy=lambda:any(j.get('status') in {'queued','running'} for j in COLLECT_JOBS.values()))
@@ -97,7 +97,7 @@ def _save_settings(data:dict[str,Any]):
 def root():return FileResponse(STATIC_DIR/"index.html",headers={"Cache-Control":"no-store"})
 
 @app.get("/health")
-def health():
+async def health():
     import hashlib
     return {"ok":True,"version":VERSION,"access_mode":"password" if access.password() else "public","storage_mode":"cloud" if cloud_db.enabled() else "local","installation_id":hashlib.sha256(str(BASE_DIR.resolve()).encode()).hexdigest()[:16],"engine":"v51_verified_sources","cities_count":len(ORIGINS),"route_selection":"any_distinct_catalog_cities","port_hint":PORT,"collect_log":str(LOG_PATH)}
 
@@ -111,9 +111,10 @@ def options(origin:str="Санкт-Петербург",destination:str|None=None
     _validate_route(origin,dest)
     # The city/company catalog must not wait for hundreds of saved tariff reads.
     # Detailed source status is requested separately when its panel is opened.
-    integrations=[coverage(origin,dest,c) for c in COMPANIES] if include_status else []
+    packs=route_packs(origin,dest) if include_status else None
+    integrations=[coverage(origin,dest,c,packs=packs) for c in COMPANIES] if include_status else []
     main=catalog=="main" and origin in MAIN_ORIGINS and dest in main_cities()
-    return {"version":VERSION,"catalog":"main" if main else "all","all_origins":ORIGINS,"main_cities":main_cities(),"origins":MAIN_ORIGINS if main else ORIGINS,"destinations":[c for c in (main_cities() if main else ORIGINS) if c!=origin],"selected_origin":origin,"selected_destination":dest,"paired_destination":dest,
+    return {"version":VERSION,"route_view":True,"catalog":"main" if main else "all","all_origins":ORIGINS,"main_cities":main_cities(),"origins":MAIN_ORIGINS if main else ORIGINS,"destinations":[c for c in (main_cities() if main else ORIGINS) if c!=origin],"selected_origin":origin,"selected_destination":dest,"paired_destination":dest,
             "profiles":COMMON_PROFILES,"companies":[{"id":c,"label":COMPANY_LABELS[c]} for c in COMPANIES],
             "integrations":integrations,"integration_status":{x["id"]:x["coverage_label"] for x in integrations},
             "import_guide":json.loads((BASE_DIR/'data/customer_source_guide.json').read_text(encoding='utf-8')),
@@ -123,7 +124,12 @@ def options(origin:str="Санкт-Петербург",destination:str|None=None
 def compare(origin:str,destination:str,profile:str="w100",companies:str|None=None):
     origin,destination=_validate_route(origin,destination)
     if profile not in PROFILE_BY_ID:raise HTTPException(400,"Неизвестный диапазон")
-    selected=_companies(companies); p=PROFILE_BY_ID[profile]; items=[quote(c,origin,destination,profile) for c in selected]
+    selected=_companies(companies)
+    return _comparison(origin,destination,profile,selected,route_packs(origin,destination))
+
+
+def _comparison(origin,destination,profile,selected,packs):
+    p=PROFILE_BY_ID[profile];items=[quote(c,origin,destination,profile,packs=packs) for c in selected]
     exact=sum(1 for x in items if x.get("comparison_value") is not None and not x.get("price_is_minimum"))
     lower=sum(1 for x in items if x.get("price_is_minimum") and x.get("price") is not None)
     online_exact=sum(1 for x in items if x.get("online") and x.get("comparison_value") is not None)
@@ -134,6 +140,15 @@ def compare(origin:str,destination:str,profile:str="w100",companies:str|None=Non
             "range_weight":p["range_weight"],"comparison_unit":tariff_unit(p),"items":items,"exact_count":exact,
             "lower_bound_count":lower,"online_count":online_total,"online_exact_count":online_exact,
             "online_lower_bound_count":online_lower,"last_good_count":last_good,"imported_count":sum(bool(x.get('uploaded')) for x in items),"missing_count":len(items)-exact-lower}
+
+
+@app.get('/api/route-view')
+def route_view(origin:str,destination:str,profile:str='w100',companies:str|None=None):
+    origin,destination=_validate_route(origin,destination)
+    if profile not in PROFILE_BY_ID:raise HTTPException(400,'Неизвестный диапазон')
+    selected=_companies(companies);packs=route_packs(origin,destination)
+    return {'comparison':_comparison(origin,destination,profile,selected,packs),
+            'matrix':{'version':VERSION,'origin':origin,'destination':destination,'profiles':matrix(origin,destination,selected,packs=packs)}}
 
 
 @app.post('/api/import/preview')
@@ -237,7 +252,10 @@ class CollectRequest(BaseModel):
 
 def _save_collect_job(job):
     from .v42_engine import _robust_json_write,_route_cfg
-    _robust_json_write(RUNTIME_DIR/'collect_jobs'/(_route_cfg(job['origin'],job['destination'])['slug']+'.json'),job)
+    # Serialize checkpoints without holding the lock used by the progress API.
+    with COLLECT_SAVE_LOCK:
+        with COLLECT_LOCK:snapshot=json.loads(json.dumps(job))
+        _robust_json_write(RUNTIME_DIR/'collect_jobs'/(_route_cfg(snapshot['origin'],snapshot['destination'])['slug']+'.json'),snapshot)
 
 
 def _run_collect(key:str,selected:list[str],origin:str,destination:str):
@@ -255,7 +273,7 @@ def _run_collect(key:str,selected:list[str],origin:str,destination:str):
                 job['progress_rows']=sum(int(x.get('rows') or 0) for x in by.values())
                 job['progress_revision']=int(job.get('progress_revision',0))+1
                 job['message']=result.get('message','')
-                _save_collect_job(job)
+            _save_collect_job(job)
         results=collect_selected(targets,origin,destination,job.get("profile") or "w100",on_progress=progress,should_stop=lambda:job.get("stop_requested",False))
         job["results"]=results; job["progress_rows"]=sum(int(x.get("rows") or 0) for x in results)
         success=[x for x in results if x.get("ok")]
@@ -357,10 +375,10 @@ def collect_status(origin:str,destination:str):
 @app.get('/api/active-collect')
 def active_collect():
     with COLLECT_LOCK:
-        bulk_id=BULK.active()
-        if bulk_id:return {'status':'running','mode':'bulk','bulk_job_id':bulk_id}
         job=next((j for j in COLLECT_JOBS.values() if j.get('status') in {'queued','running'}),None)
-        return json.loads(json.dumps(job)) if job else {'status':'idle'}
+        if job:return json.loads(json.dumps(job))
+    bulk_id=BULK.active()
+    return {'status':'running','mode':'bulk','bulk_job_id':bulk_id} if bulk_id else {'status':'idle'}
 
 
 class BulkRequest(BaseModel):

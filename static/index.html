@@ -16,7 +16,7 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 </script>
 <title>Тарифы — большая таблица и прайс-листы</title>
 <link href="/static/favicon.svg" rel="icon" type="image/svg+xml"/>
-<link href="/static/styles.css?v=631" rel="stylesheet"/>
+<link href="/static/styles.css?v=632" rel="stylesheet"/>
 </head>
 <body>
 <div class="app-shell"><aside class="sidebar"><a class="brand" data-open-workspace="route" href="#"><span aria-hidden="true" class="brand-mark">Т</span><span><strong>Тарифы</strong><small>Работа с прайс-листами</small></span></a><nav aria-label="Разделы приложения" class="workspace-nav" role="tablist"><button aria-controls="routeWorkspace" aria-selected="true" class="nav-item active" data-workspace="route" id="routeTab" role="tab"><span class="nav-number">01</span><span>Один маршрут</span></button><button aria-controls="bulkPanel" aria-selected="false" class="nav-item" data-workspace="bulk" id="bulkOpenButton" role="tab"><span class="nav-number">02</span><span>Большая таблица</span></button><button aria-controls="documentsPanel" aria-selected="false" class="nav-item" data-workspace="documents" id="documentsTab" role="tab"><span class="nav-number">03</span><span>Прайс-листы</span></button></nav></aside>
@@ -218,7 +218,7 @@ document.querySelector('meta[name="theme-color"]').content = initialTheme === 'd
 </form>
 </dialog>
 <dialog aria-labelledby="manualPriceTitle" class="settings-dialog" id="manualPriceDialog"><form class="settings-card" id="manualPriceForm"><div class="dialog-head"><h2 id="manualPriceTitle">Цена в ячейке</h2><button aria-label="Закрыть" class="icon-button" id="manualPriceClose" type="button">×</button></div><p id="manualPriceContext"></p><p>Ручная цена сохраняется на сервере и используется в обеих выгрузках. Она будет помечена «Введено вручную». Новый применённый файл заменит её, если содержит этот вес.</p><div class="settings-grid"><label class="field"><span>Цена</span><input autocomplete="off" id="manualPriceValue" inputmode="decimal" placeholder="Например, 600 или 14,50" required="" type="text"/></label><label class="field"><span>Единица тарифа</span><select id="manualPriceUnit"><option value="rub">₽ за отправку</option><option value="rub_per_kg">₽/кг</option></select></label></div><p id="manualPriceUnitHelp"></p><div aria-live="polite" class="form-message" id="manualPriceMessage" role="status"></div><div class="dialog-actions"><button class="button secondary" hidden="" id="manualPriceDelete" type="button">Убрать ручную цену</button><button class="button secondary" id="manualPriceCancel" type="button">Отмена</button><button class="button primary" id="manualPriceSave" type="submit">Сохранить цену</button></div></form></dialog><div class="toast" id="toast" role="status"></div>
-<script src="/static/workspace.js?v=631"></script>
-<script src="/static/app.js?v=631"></script>
+<script src="/static/workspace.js?v=632"></script>
+<script src="/static/app.js?v=632"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // Three client workflows: the full reference table, one route, and price files.
 const wsEl=id=>document.getElementById(id);
 const documentState={job:null,busy:false,file:null,files:[],resolutions:{},seq:0};
-function setWorkspace(name,{focus=false}={}){
+function setWorkspace(name,{focus=false,refresh=true}={}){
   if(!['bulk','route','documents'].includes(name))name='route';
   state.workspace=name;localStorage.setItem('tariff-workspace-v48',name);
   const panels={bulk:'bulkPanel',route:'routeWorkspace',documents:'documentsPanel'};
@@ -12,7 +12,7 @@ function setWorkspace(name,{focus=false}={}){
   if(focus)wsEl('workspaceTitle').focus({preventScroll:true});
   if(name==='documents'){refreshDocuments();refreshStorageInfo();}
   if(name==='bulk'){refreshBulkAfterDocuments();loadBulkHistory();}
-  if(name==='route'&&state.options){compare();}
+  if(name==='route'&&state.options&&refresh){compare();}
 }
 function updateThemeButton(){
   const dark=document.documentElement.dataset.theme==='dark';
@@ -27,7 +27,7 @@ async function initWorkspace(){
   wsEl('documentOrigin').innerHTML='<option value="">Определить из файла</option>'+cities;
   wsEl('documentCompany').innerHTML=state.options.companies.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join('');
   documentGuide();updateThemeButton();
-  setWorkspace('route');
+  setWorkspace('route',{refresh:false});
   await refreshDocuments();
   refreshStorageInfo();
   restoreDocumentPreview();

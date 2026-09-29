@@ -26,7 +26,9 @@ def cleanup_previews():
 
 def summary():
     from . import cloud_db,data_store
-    cleanup_previews()
+    # Remote status must not queue behind uploads or run cleanup transactions.
+    # Local cleanup is fast and preserves the existing retention behaviour.
+    if not cloud_db.enabled():cleanup_previews()
     root=e.RUNTIME_DIR/'imports'
     files=[p for p in (root/'files').glob('*') if p.is_file() and not p.is_symlink()]
     from .runtime_paths import persistence_info

@@ -50,9 +50,9 @@ def _id(value):
     return value
 
 
-def pack(origin,destination):
+def pack(origin,destination,*,migrate=True):
     origin,destination=e.route_pair(origin,destination)
-    migrate_legacy(origin,destination)
+    if migrate:migrate_legacy(origin,destination)
     if not cloud_db.enabled() and not (root()/'documents.sqlite3').exists():return {'profiles':{},'companies':{}}
     with db() as conn:
         rows=conn.execute('''SELECT f.id,f.rowid AS sequence,f.company,f.meta,f.active,p.profile,p.payload
@@ -83,12 +83,19 @@ def pack(origin,destination):
 
 def migrate_legacy(origin=None,destination=None):
     """Register confirmed pre-53 route files once, preserving originals and revisions."""
-    with e.STATE_LOCK:
-        from .document_imports import route_path
-        paths=[route_path(origin,destination)] if origin and destination else data_store.paths(root()/'routes','*.json')
-        for path in paths:
-            try:signature=(str(path.resolve()),) if cloud_db.enabled() else (str(path.resolve()),path.stat().st_mtime_ns,path.stat().st_size)
-            except FileNotFoundError:continue
+    from .document_imports import route_path
+    paths=[route_path(origin,destination)] if origin and destination else data_store.paths(root()/'routes','*.json')
+    for path in paths:
+        try:signature=(str(path.resolve()),) if cloud_db.enabled() else (str(path.resolve()),path.stat().st_mtime_ns,path.stat().st_size)
+        except FileNotFoundError:continue
+        if signature in _MIGRATED:continue
+        # Most current installations have no legacy route documents. Reading a
+        # price table must not queue behind a file upload holding STATE_LOCK.
+        data=e._read_json(path,{})
+        if not data.get('companies'):
+            _MIGRATED.add(signature)
+            continue
+        with e.STATE_LOCK:
             if signature in _MIGRATED:continue
             data=e._read_json(path,{})
             for company,meta in data.get('companies',{}).items():
@@ -106,7 +113,7 @@ def migrate_legacy(origin=None,destination=None):
                     if conn.execute('SELECT 1 FROM files WHERE id=?',(filename.split('.')[0],)).fetchone():continue
                     conn.execute('INSERT INTO files(id,company,meta,active) VALUES (?,?,?,1)',(filename.split('.')[0],company,json.dumps(saved,ensure_ascii=False)))
                     for pid,value in values.items():conn.execute('INSERT INTO prices(file,origin,destination,profile,payload) VALUES (?,?,?,?,?)',(filename.split('.')[0],o,d,pid,json.dumps(value,ensure_ascii=False)))
-            _MIGRATED.add(signature)
+        _MIGRATED.add(signature)
 
 
 def register_single(ident,meta,values,origin,destination):
