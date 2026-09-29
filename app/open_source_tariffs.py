@@ -11,7 +11,8 @@ import requests
 from bs4 import BeautifulSoup
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-RUNTIME_DIR = Path(os.environ.get("TARIFF_DATA_DIR") or BASE_DIR / "runtime").expanduser().resolve()
+from .runtime_paths import runtime_directory
+RUNTIME_DIR = runtime_directory(BASE_DIR)
 CACHE_DIR = RUNTIME_DIR / "cache"
 DOWNLOAD_DIR = RUNTIME_DIR / "downloads"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)

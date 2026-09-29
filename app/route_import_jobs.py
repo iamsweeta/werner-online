@@ -1,12 +1,13 @@
 """Durable asynchronous previews for One route. HTTP never waits for OCR.
 
-SQLite makes status/idempotency visible to all web workers sharing TARIFF_DATA_DIR.
+SQLite or PostgreSQL persists job status and idempotency across restarts.
 Only explicit /api/import/commit applies a preview to the price library.
 """
 from __future__ import annotations
 import hashlib,json,re,sqlite3,threading,time,uuid
 from contextlib import contextmanager
 from pathlib import Path
+from . import cloud_db,data_store
 from . import document_imports as imports,tariff_documents as documents
 
 STALE_SECONDS=90
@@ -24,13 +25,12 @@ def ident(value):
 @contextmanager
 def database(folder=None):
     folder=folder or root();folder.mkdir(parents=True,exist_ok=True)
-    conn=sqlite3.connect(folder/'jobs.sqlite3',timeout=5);conn.row_factory=sqlite3.Row
-    try:
+    from .cloud_db import connect
+    with connect(folder/'jobs.sqlite3','importjobs') as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS jobs (
           id TEXT PRIMARY KEY, fingerprint TEXT, company TEXT, origin TEXT, destination TEXT,
           filename TEXT, created REAL, updated REAL, status TEXT, message TEXT, payload TEXT)''')
-        with conn:yield conn
-    finally:conn.close()
+        yield conn
 
 
 def _update(folder,key,status=None,message=None,payload=None):
@@ -44,17 +44,17 @@ def _update(folder,key,status=None,message=None,payload=None):
 
 def _stale(conn):
     conn.execute("UPDATE jobs SET status='interrupted',message=? WHERE status IN ('queued','parsing') AND updated<?",
-                 ('Распознавание прервано: сервер перестал отвечать или перезапустился. Загрузите файл заново. Сохранённые прайсы не изменены.',time.time()-STALE_SECONDS))
+                 ('Распознавание прервано: сервер перестал отвечать или перезапустился. Повторите распознавание. Сохранённые прайсы не изменены.',time.time()-STALE_SECONDS))
 
 
 def cleanup():
     folder=root()
-    if not (folder/'jobs.sqlite3').exists():return
-    with database(folder) as conn:
+    if not cloud_db.enabled() and not (folder/'jobs.sqlite3').exists():return
+    with imports.e.STATE_LOCK, database(folder) as conn:
         _stale(conn)
         rows=conn.execute("SELECT id FROM jobs WHERE status NOT IN ('queued','parsing') AND updated<?",(time.time()-imports.PREVIEW_TTL,)).fetchall()
         for row in rows:
-            (folder/(row['id']+'.upload')).unlink(missing_ok=True)
+            data_store.delete(folder/(row['id']+'.upload'))
             conn.execute('DELETE FROM jobs WHERE id=?',(row['id'],))
 
 
@@ -67,14 +67,14 @@ def status(key,folder=None):
     data=json.loads(row['payload']);state=row['status'];message=row['message']
     if state=='ready':
         preview=data['preview'];meta=preview['meta'];token=preview['token']
-        if (folder.parent/'files'/(token+meta['extension'])).is_file():state='committed';message='Этот прайс уже сохранён в библиотеке.'
-        elif time.time()-row['updated']>imports.PREVIEW_TTL or not (folder.parent/'pending'/(token+'.json')).is_file():
+        if data_store.exists(folder.parent/'files'/(token+meta['extension'])):state='committed';message='Этот прайс уже сохранён в библиотеке.'
+        elif time.time()-row['updated']>imports.PREVIEW_TTL or not data_store.exists(folder.parent/'pending'/(token+'.json')):
             state='expired';message='Предпросмотр истёк. Загрузите файл заново и проверьте цены.'
     return {'job_id':key,'status':state,'company':row['company'],'origin':row['origin'],'destination':row['destination'],
             'filename':row['filename'],'message':message,**{k:v for k,v in data.items() if k!='preview'},
             'elapsed_seconds':max(0,int(time.time()-row['created'])),
             'stage_elapsed_seconds':max(0,int(time.time()-data.get('ocr_stage_started',row['created']))),
-            **({'preview':data['preview']} if state=='ready' else {})}
+            **({'preview':data['preview']} if state=='ready' else {}),'can_retry':state in {'error','interrupted'} and data_store.exists(folder/(key+'.upload'))}
 
 
 def start(raw,filename,company,origin,destination,job_id=None):
@@ -85,19 +85,27 @@ def start(raw,filename,company,origin,destination,job_id=None):
     key=ident(job_id) if job_id else uuid.uuid4().hex;folder=root()
     fingerprint=hashlib.sha256(raw+json.dumps([company,origin,destination,name],ensure_ascii=False).encode()).hexdigest()
     cleanup()
-    with database(folder) as conn:
+    launch=False
+    # Store the input reference and job in the same PostgreSQL transaction.
+    # StateLock also lets data_store reuse this connection instead of opening a
+    # nested connection while the job transaction holds an advisory lock.
+    with imports.e.STATE_LOCK, database(folder) as conn:
         conn.execute('BEGIN IMMEDIATE')
-        existing=conn.execute('SELECT fingerprint FROM jobs WHERE id=?',(key,)).fetchone()
+        existing=conn.execute('SELECT fingerprint,status FROM jobs WHERE id=?',(key,)).fetchone()
         if existing:
             if existing['fingerprint']!=fingerprint:raise ValueError('Этот номер задания относится к другому файлу или маршруту. Начните новую загрузку.')
+            if existing['status'] in {'error','interrupted'}:
+                if conn.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued','parsing')").fetchone()[0]>=MAX_ACTIVE:raise ValueError('Дождитесь завершения других документов.')
+                conn.execute("UPDATE jobs SET status='queued',message='Повторяю распознавание',payload='{}',updated=? WHERE id=?",(time.time(),key))
+                launch=True
         else:
             _stale(conn)
             if conn.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued','parsing')").fetchone()[0]>=MAX_ACTIVE:
                 raise ValueError('Уже распознаются два документа. Дождитесь завершения и повторите загрузку.')
-            (folder/(key+'.upload')).write_bytes(raw)
-            now=time.time();conn.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            data_store.write_bytes(folder/(key+'.upload'),raw)
+            now=time.time();conn.execute('INSERT INTO jobs(id,fingerprint,company,origin,destination,filename,created,updated,status,message,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                 (key,fingerprint,company,origin,destination,name,now,now,'queued','Файл принят. Готовлю распознавание…','{}'))
-    if not existing:
+    if not existing or launch:
         threading.Thread(target=_run,args=(folder,key,str(filename),company,origin,destination),daemon=True).start()
     return status(key,folder)
 
@@ -108,18 +116,36 @@ def _run(folder,key,filename,company,origin,destination):
     def heartbeat():
         while not stop.wait(10):
             try:_update(folder,key)
-            except (OSError,sqlite3.Error):pass
+            except (OSError,sqlite3.Error,cloud_db.StorageUnavailable):pass
     monitor=threading.Thread(target=heartbeat,daemon=True);monitor.start()
     def progress(info):
         _update(folder,key,message=info['message'],payload={'ocr_page':info['done'],'ocr_total':info['total'],'ocr_stage_started':time.time()})
     context=scan_ocr._PROGRESS.set(progress)
     try:
         _update(folder,key,status='parsing',message='Читаю документ и проверяю выбранное направление…')
-        raw=(folder/(key+'.upload')).read_bytes()
+        raw=data_store.read_bytes(folder/(key+'.upload'))
         result=imports.preview(raw,filename,company,origin,destination)
         _update(folder,key,status='ready',message='Распознавание завершено. Проверьте цены перед сохранением.',payload={'preview':result})
     except Exception as exc:
         _update(folder,key,status='error',message=str(exc)[:1500])
     finally:
         stop.set();monitor.join(timeout=1);scan_ocr._PROGRESS.reset(context)
-        (folder/(key+'.upload')).unlink(missing_ok=True)
+        try:
+            with database(folder) as conn:finished=conn.execute('SELECT status FROM jobs WHERE id=?',(key,)).fetchone()
+            if finished and finished['status']=='ready':data_store.delete(folder/(key+'.upload'))
+        except Exception:pass
+
+
+def retry(key):
+    key=ident(key)
+    with database() as conn:job=conn.execute('SELECT * FROM jobs WHERE id=?',(key,)).fetchone()
+    if not job:raise ValueError('Задание не найдено')
+    if job['status'] not in {'error','interrupted'}:return status(key)
+    return start(data_store.read_bytes(root()/(key+'.upload')),job['filename'],job['company'],job['origin'],job['destination'],job_id=key)
+
+
+def recover():
+    if not cloud_db.enabled():return
+    with database() as conn:
+        conn.execute("UPDATE jobs SET status='interrupted',message=? WHERE status IN ('queued','parsing')",
+                     ('Сервер перезапущен. Нажмите «Повторить распознавание»: файл уже сохранён.',))

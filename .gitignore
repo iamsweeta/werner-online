@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+render.env
+*.env
+runtime/
+runtime-*/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+node_modules/
+*.log
+tariff_data_backup*.zip
+backup*.zip

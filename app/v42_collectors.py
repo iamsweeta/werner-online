@@ -171,8 +171,8 @@ def _download_html_bytes(url: str, *, referer: str | None = None, timeout: int =
 
 def _browser_enabled():
     from .legacy_backend import SETTINGS_PATH
-    try:return json.loads(SETTINGS_PATH.read_text(encoding='utf-8')).get('public_browser_enabled') is True
-    except (OSError,ValueError):return False
+    from .v42_engine import _read_json
+    return _read_json(SETTINGS_PATH,{}).get('public_browser_enabled') is True
 
 
 def _fetch_submitted_form_html_browser(url: str, origin: str, destination: str) -> tuple[str,str,str]:

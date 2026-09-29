@@ -1,0 +1,36 @@
+# Render Free + external PostgreSQL and private S3-compatible storage.
+# For an existing service follow SETUP_RENDER_NEON.md; a commit alone is not a migration.
+services:
+  - type: web
+    name: tariff-app
+    runtime: python
+    plan: free
+    numInstances: 1
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.v42_main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    envVars:
+      - key: TARIFF_STORAGE
+        value: cloud
+      - key: DATABASE_URL
+        sync: false
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PREFIX
+        value: tariff-app
+      - key: APP_USERNAME
+        value: manager
+      - key: APP_PASSWORD
+        generateValue: true
+      - key: TARIFF_DATA_DIR
+        value: ./runtime
+      - key: PYTHON_VERSION
+        value: 3.12.11

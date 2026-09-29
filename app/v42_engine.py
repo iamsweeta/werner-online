@@ -18,7 +18,8 @@ from .cities import normalize_city, route_supported, route_slug
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-RUNTIME_DIR = Path(os.environ.get('TARIFF_DATA_DIR') or BASE_DIR / 'runtime').expanduser().resolve()
+from .runtime_paths import runtime_directory
+RUNTIME_DIR = runtime_directory(BASE_DIR)
 ROUTE_CONFIG = {
     ("Санкт-Петербург", "Москва"): {
         "slug": "spb_moscow",
@@ -31,7 +32,8 @@ ROUTE_CONFIG = {
         "live": RUNTIME_DIR / "v42_moscow_spb_live.json",
     },
 }
-STATE_LOCK = threading.RLock()
+from .cloud_db import StateLock
+STATE_LOCK = StateLock()
 LIVE_TTL_SECONDS = 1800
 
 def age_seconds(stamp: str | None) -> float:
@@ -99,6 +101,8 @@ def _route_cfg(origin: str, destination: str) -> dict[str, Any]:
                                    "live":RUNTIME_DIR/"routes"/(route_slug(*key)+".json")}
 
 def _read_json(path: Path | None, default: Any) -> Any:
+    from . import data_store
+    if data_store.managed(path):return data_store.read_json(path,default)
     # A fresh install has no LIVE file yet. Missing files are a normal state and
     # must return immediately; retrying them makes /api/options appear frozen.
     if path is None or not path.exists():
@@ -119,6 +123,10 @@ def _read_json(path: Path | None, default: Any) -> Any:
 
 def _robust_json_write(path: Path, payload: Any) -> None:
     """Atomic-ish JSON persistence resilient to Windows AV/indexer locks."""
+    from . import data_store
+    if data_store.managed(path):
+        data_store.write_json(path,payload)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     text=json.dumps(payload,ensure_ascii=False,indent=2)
     tmp=path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.{uuid.uuid4().hex[:8]}.tmp")
@@ -156,6 +164,11 @@ def price_revision():
     return _read_json(RUNTIME_DIR/'prices_revision.json',{}).get('revision','0')
 
 
+def bump_price_revision():
+    """Invalidate exports when prices OR their confirmation status change."""
+    _robust_json_write(RUNTIME_DIR/'prices_revision.json',{'revision':uuid.uuid4().hex,'updated_at':_now()})
+
+
 def live_path_for(origin: str, destination: str) -> Path:
     return _route_cfg(origin,destination)["live"]
 
@@ -176,6 +189,7 @@ def begin_live_attempt(company: str, origin: str, destination: str, profile_id: 
             "missing_profile_errors":{}, "partial_errors":[],
         })
         _write_live(origin,destination,live)
+        bump_price_revision()
     return attempt_id
 
 def save_live_update(company: str, origin: str, destination: str, profile_values: dict[str, dict[str, Any]], meta: dict[str, Any], attempt_id: str | None=None) -> None:
@@ -193,6 +207,13 @@ def save_live_update(company: str, origin: str, destination: str, profile_values
         aid=attempt_id or company_meta.get("current_attempt_id")
         if company_meta.get('current_attempt_id') != aid:
             raise ValueError('Устаревшая попытка обновления: её результат отклонён')
+        from . import data_store
+        if data_store.managed(RUNTIME_DIR):
+            sources={str(v.get('source_file') or '') for v in profile_values.values()}|{str(meta.get('source_file') or '')}
+            for name in sources:
+                if name and Path(name).name==name:
+                    original=RUNTIME_DIR/'downloads'/name
+                    if original.is_file():data_store.store_file(original)
         captured_at=str(meta.get("captured_at") or _now())
         # Absence in a new response must not destroy the last successful price.
         # The quote below marks retained rows as unconfirmed, never as LIVE.
@@ -219,7 +240,7 @@ def save_live_update(company: str, origin: str, destination: str, profile_values
         company_meta.update({k:v for k,v in meta.items() if v is not None})
         company_meta.update({"current_attempt_id":aid,"last_success_at":captured_at,"data_origin":"online"})
         _write_live(origin,destination,live)
-        _robust_json_write(RUNTIME_DIR/"prices_revision.json",{"revision":uuid.uuid4().hex,"updated_at":_now()})
+        bump_price_revision()
 
 def finish_live_attempt(company: str, origin: str, destination: str, attempt_id: str, *, rows: int, error: str | None=None) -> None:
     with STATE_LOCK:
@@ -237,6 +258,7 @@ def finish_live_attempt(company: str, origin: str, destination: str, attempt_id:
             "last_finished_at":_now(),
         })
         _write_live(origin,destination,live)
+        bump_price_revision()
 
 def live_company_state(origin: str, destination: str, company: str) -> dict[str, Any]:
     return dict((_live_pack(origin,destination).get("companies") or {}).get(company,{}) or {})

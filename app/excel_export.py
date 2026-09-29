@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import math
+import tempfile
 import zipfile
 import xml.etree.ElementTree as ET
 from copy import copy
@@ -53,8 +54,9 @@ def _routes(origin, destination, all_loaded):
     found = {current}
     if all_loaded:
         found.update(e.ROUTE_CONFIG)
-        paths = list((e.RUNTIME_DIR/'routes').glob('*.json'))
-        paths += list((e.RUNTIME_DIR/'imports'/'routes').glob('*.json'))
+        from .data_store import paths as stored_paths
+        paths = stored_paths(e.RUNTIME_DIR/'routes','*.json')
+        paths += stored_paths(e.RUNTIME_DIR/'imports'/'routes','*.json')
         for path in paths[:1000]:
             data = e._read_json(path, {})
             candidates = [data.get('route', {})] + list(data.get('companies', {}).values())
@@ -76,7 +78,7 @@ def _value(item, profile, live_only, include_imports):
 
 
 def build_workbook(origin, destination, selected, *, live_only=False, include_imports=True, all_loaded=True,
-                   routes_override=None, matrix_provider=None, collection_info=None):
+                   routes_override=None, matrix_provider=None, collection_info=None, audit_stream=None):
     wb=load_workbook(e.DATA_DIR/'export_template.xlsx')
     if 'Грузопоток' in wb:del wb['Грузопоток']
     if 'Байкал Сервис' not in wb:
@@ -92,14 +94,18 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
         data=((route,matrix_provider(*route)) for route in routes)
     else:
         with e.STATE_LOCK:
-            snapshot={route:e.matrix(*route,list(e.COMPANIES)) for route in routes}
-            if include_imports:
-                from .bulk_refresh import fill_document_gaps
-                from .document_imports import pack
-                for route,rows in snapshot.items():
+            from .bulk_refresh import fill_document_gaps
+            from .document_imports import pack
+            snapshot={}
+            for route in routes:
+                documents=pack(*route) if include_imports else {}
+                packs=(e._base_pack(*route),e._live_pack(*route),documents)
+                rows=[{'profile':p,'items':[e._route_quote(c,*route,p['id'],packs) for c in e.COMPANIES]} for p in e.COMMON_PROFILES]
+                if include_imports:
                     for row in rows:
                         for item in row['items']:item['collected_online']=bool(item.get('online'))
-                    snapshot[route]=fill_document_gaps(rows,pack(*route),*route)
+                    rows=fill_document_gaps(rows,documents,*route)
+                snapshot[route]=rows
         data=snapshot.items()
     values={}
     counts={'online':0,'saved':0,'document':0,'manual':0,'missing':0}
@@ -107,6 +113,8 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
     audit.append(['Компания','Откуда','Куда','Диапазон','Стоимость отправки, ₽','Статус',
                   'Получено','Официальный URL','Расчёт','Файл пользователя','Дата документа',
                   'SHA256','Страница / строка','Причина отсутствия / ошибка','Опубликованная ставка, ₽/кг','Минимальная плата, ₽','Условия НДС'])
+    if audit_stream:audit_stream.bind(audit)
+    append_audit=audit_stream.append if audit_stream else audit.append
     for route, rows in data:
         audit_groups={}
         for row in rows:
@@ -136,8 +144,10 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
                     else:
                         audit_groups[key][3]+=', '+p['label']
                         audit_groups[key][4]=None
-                else:audit.append(record)
-        for record in audit_groups.values():audit.append(record)
+                else:append_audit(record)
+        for record in audit_groups.values():append_audit(record)
+    body_font=Font(name='Arial',size=10)
+    body_alignment=Alignment(vertical='center')
     for ws in wb:
         if ws.title in HELPER_SHEETS or ws.title=='Источники':continue
         company=mapping.get(ws.title)
@@ -180,6 +190,7 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
             ('Режим','Текущие данные + прайс-листы' if collection_info.get('mode')=='saved' else 'Обновление онлайн + прайс-листы' if collection_info.get('include_imports') else 'Обновление только онлайн'),
             ('Числовых ячеек из онлайн-ответов',counts['online']),('Числовых ячеек из файлов',counts['document']),
             ('Числовых ячеек из прежних сохранённых цен',counts['saved']),
+            ('Числовых ячеек, введённых вручную',counts['manual']),
             ('Ячеек без точного значения',counts['missing']),
             ('Завершение','Все запланированные проверки выполнены' if collection_info['status']=='done' else 'Обновление остановлено: выгружен весь выбранный список маршрутов с доступными сохранёнными ценами'),
             ('Обновление','Запустите новый общий сбор в приложении, затем скачайте Excel'),
@@ -249,11 +260,12 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
         ws.sheet_properties.pageSetUpPr.fitToPage=True
         ws.page_setup.orientation='landscape';ws.page_setup.paperSize=ws.PAPERSIZE_A3
         ws.page_setup.fitToWidth=1;ws.page_setup.fitToHeight=0
-        for row in ws:
-            for cell in row:
-                if cell.row>1 and not cell.has_style:
-                    cell.font=Font(name='Arial',size=10)
-                    cell.alignment=Alignment(vertical='center')
+        # Iterating the rectangular grid creates thousands of otherwise absent
+        # blank cells in the reference's helper sheets. Style existing cells.
+        for cell in list(ws._cells.values()):
+            if cell.row>1 and not cell.has_style:
+                cell.font=body_font
+                cell.alignment=body_alignment
     audit.freeze_panes='D2';audit.auto_filter.ref=audit.dimensions
     for cell in audit[1]:
         cell.font=Font(name='Arial',size=10,bold=True);cell.fill=PatternFill('solid',fgColor='FFF2CC')
@@ -275,7 +287,16 @@ def build_workbook(origin, destination, selected, *, live_only=False, include_im
 
 
 def export_bytes(*args,**kwargs):
-    wb=build_workbook(*args,**kwargs)
+    # Bulk evidence is often much larger than the carrier price grid. Spooling
+    # it keeps memory bounded even when each weight has a different source row.
+    with tempfile.TemporaryFile(mode='w+b') as audit_file:
+        from .excel_audit import AuditStream
+        stream=AuditStream(audit_file) if kwargs.get('collection_info') else None
+        return _export_bytes(*args,audit_stream=stream,**kwargs)
+
+
+def _export_bytes(*args,audit_stream=None,**kwargs):
+    wb=build_workbook(*args,audit_stream=audit_stream,**kwargs)
     out=io.BytesIO();wb.save(out)
     # Store the evaluated snapshot as Excel formula caches for viewers that do
     # not recalculate on opening. The formulas remain editable and auto-recalc.
@@ -283,9 +304,13 @@ def export_bytes(*args,**kwargs):
     cache={f'xl/worksheets/sheet{wb.sheetnames.index(name)+1}.xml':cells
            for name,cells in wb._tariff_formula_cache.items()}
     result=io.BytesIO()
+    audit_name=f'xl/worksheets/sheet{wb.sheetnames.index("Источники")+1}.xml'
     with zipfile.ZipFile(io.BytesIO(out.getvalue())) as source,zipfile.ZipFile(result,'w',zipfile.ZIP_DEFLATED) as target:
         for entry in source.infolist():
             raw=source.read(entry.filename)
+            if audit_stream and entry.filename==audit_name:
+                with target.open(entry,'w') as audit_target:audit_stream.write_sheet(raw,audit_target)
+                continue
             if entry.filename in cache:
                 root=ET.fromstring(raw)
                 for cell in root.iter(ns+'c'):
@@ -300,4 +325,5 @@ def export_bytes(*args,**kwargs):
                     else:cell.set('t','str');v.text=str(value or '')
                 raw=ET.tostring(root,encoding='utf-8',xml_declaration=True)
             target.writestr(entry,raw)
+    wb.close()
     return result.getvalue()

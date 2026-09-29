@@ -10,6 +10,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import v42_engine as e
+from . import data_store,cloud_db
 from .tariff_documents import parse_document, normalize_filename, MAX_BYTES
 
 PREVIEW_TTL = 1800
@@ -116,7 +117,7 @@ def preview(raw, filename, company, origin, destination):
     with e.STATE_LOCK:
         cleanup_pending()
         pending=_token_path(token);pending.parent.mkdir(parents=True,exist_ok=True)
-        pending.with_suffix(ext).write_bytes(raw)
+        data_store.write_bytes(pending.with_suffix(ext),raw)
         e._robust_json_write(pending,{'meta':meta,'values':values})
     return {'token':token,'company':company,'origin':origin,'destination':destination,'meta':meta,
             'warnings':warnings,'rows':[{'profile':p,**values[p['id']]} for p in e.COMMON_PROFILES if p['id'] in values],
@@ -125,23 +126,27 @@ def preview(raw, filename, company, origin, destination):
 
 def commit(token):
     with e.STATE_LOCK:
+        from .price_library import committed
+        prior=committed(token)
+        if prior:return {'ok':True,'company':prior['company'],'origin':prior['origin'],'destination':prior['destination'],
+                         'rows':prior['values_count'],'meta':prior,'already_applied':True}
         pending=_token_path(token);data=e._read_json(pending,{})
         if not data or e.age_seconds(data['meta'].get('created_at'))>PREVIEW_TTL:
             raise ValueError('Предпросмотр истёк. Загрузите файл заново и проверьте цены')
         meta=data['meta'];values=data['values'];_check_values(values)
         company=meta['company'];o,d=_validate(company,meta['origin'],meta['destination'])
-        source=pending.with_suffix(meta['extension']);raw=source.read_bytes()
+        source=pending.with_suffix(meta['extension']);raw=data_store.read_bytes(source)
         if hashlib.sha256(raw).hexdigest()!=meta['sha256']:
             raise ValueError('Файл изменился после предпросмотра; сохранение отменено')
         filename=token+meta['extension'];target=root()/'files'/filename
-        target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
+        target.parent.mkdir(parents=True,exist_ok=True);data_store.write_bytes(target,raw)
         saved={**meta,'import_revision':revision()+1,'source_file':filename,'uploaded_at':e._now(),'captured_at':e._now(),'online':False}
         from .price_library import register_single
         saved=register_single(token,saved,values,o,d)
         from .manual_prices import clear_covered
         clear_covered(company,o,d,values)
         bump_revision()
-        pending.unlink(missing_ok=True);source.unlink(missing_ok=True)
+        data_store.delete(pending);data_store.delete(source)
         return {'ok':True,'company':company,'origin':o,'destination':d,'rows':len(values),'meta':saved}
 
 
@@ -161,5 +166,5 @@ def source_file(filename):
     if not re.fullmatch(r'[a-f0-9]{32}\.(pdf|xlsx|xls|zip|csv)',filename):
         raise FileNotFoundError('Файл не найден')
     p=root()/'files'/filename
-    if not p.is_file():raise FileNotFoundError('Файл не найден')
-    return p
+    if not data_store.exists(p):raise FileNotFoundError('Файл не найден')
+    return data_store.materialize(p)

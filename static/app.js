@@ -360,7 +360,8 @@ async function resumeRefresh(){
 
 function exportExcel(){ window.location.href=`/api/export/route?${queryString()}`; }
 
-const bulkState={job:null,monitoring:false,requesting:false,planSeq:0,planReady:false};
+const bulkState={job:null,monitoring:false,monitorSeq:0,viewSeq:0,requesting:false,planSeq:0,planReady:false};
+function stopBulkMonitor(){bulkState.monitorSeq++;bulkState.monitoring=false;}
 function bulkBody(){
   const scope=$('bulkScope').value;
   const origins=[...$('bulkOrigins').selectedOptions].map(x=>x.value);
@@ -397,7 +398,11 @@ async function updateBulkPlan(){
 }
 function renderBulk(job){
   bulkState.job=job;bulkControls();if(typeof renderCoverage==='function')renderCoverage(job);
-  if(job.status==='idle')return;
+  if(job.status==='idle'){
+    $('bulkDownload').hidden=true;$('bulkDownload').removeAttribute('href');
+    $('bulkProgress').hidden=true;$('bulkResults').hidden=true;$('bulkRecent').textContent='';
+    $('bulkStatus').textContent='Выберите список маршрутов и создайте Excel из сохранённых цен или обновите прайсы онлайн.';return;
+  }
   const labels={queued:'В очереди',running:'Идёт сбор',pausing:'Сохраняю проверки перед остановкой',paused:'Пауза',done:'Проверки завершены',error:'Сбор прерван'};
   const current=job.current?` Сейчас: ${job.current.origin} → ${job.current.destination}.`:'';
   const outcomes=job.outcomes||{};
@@ -411,29 +416,31 @@ function renderBulk(job){
   $('bulkRecent').innerHTML=(job.recent||[]).map(r=>`<div class="company-progress-row"><strong>${escapeHtml(r.company)} · ${escapeHtml(statuses[r.status]||r.status)}</strong><span>${escapeHtml(r.origin)} → ${escapeHtml(r.destination)}</span><span>Точных весов: ${Number(r.exact_weights)||0}/28 · по запросу: ${Number(r.on_request)||0}</span><small>${escapeHtml(r.checked_at||'')}</small><details><summary>Ответ источника</summary>${escapeHtml(r.message||'')}</details></div>`).join('');
 }
 async function monitorBulk(id){
-  if(bulkState.monitoring)return;
+  const seq=++bulkState.monitorSeq;
   bulkState.monitoring=true;let errors=0,revision=-1;
   try{
-    while(true){
+    while(seq===bulkState.monitorSeq){
       let job;
       try{job=await getJSON('/api/bulk/'+encodeURIComponent(id));errors=0;}
-      catch(e){if(++errors>=5)throw e;$('bulkStatus').textContent='Связь с приложением прервана. Повторяю запрос состояния…';await new Promise(r=>setTimeout(r,3000));continue;}
+      catch(e){if(seq!==bulkState.monitorSeq)return;if(++errors>=5)throw e;$('bulkStatus').textContent='Связь с приложением прервана. Повторяю запрос состояния…';await new Promise(r=>setTimeout(r,3000));continue;}
+      if(seq!==bulkState.monitorSeq)return;
       renderBulk(job);
       if(job.completed_checks!==revision){revision=job.completed_checks;await compare();}
       if(!['queued','running','pausing'].includes(job.status)&&job.export_status!=='running')break;
       await new Promise(r=>setTimeout(r,2500));
     }
-  }catch(e){$('bulkStatus').textContent=`Не удалось прочитать состояние: ${e.message}. Сбор продолжится, если приложение запущено. Обновите страницу для подключения.`;}
-  finally{bulkState.monitoring=false;if(typeof loadBulkHistory==='function')loadBulkHistory();}
+  }catch(e){if(seq===bulkState.monitorSeq)$('bulkStatus').textContent=`Не удалось прочитать состояние: ${e.message}. Сбор продолжится, если приложение запущено. Обновите страницу для подключения.`;}
+  finally{if(seq===bulkState.monitorSeq){bulkState.monitoring=false;if(typeof loadBulkHistory==='function')loadBulkHistory();}}
 }
 async function bulkAction(action){
   if(bulkState.requesting)return;
+  stopBulkMonitor();++bulkState.viewSeq;
   bulkState.requesting=true;bulkControls();
   try{
     const url=['start','saved'].includes(action)?'/api/bulk':`/api/bulk/${encodeURIComponent(bulkState.job.job_id)}/${action}`;
     const job=await getJSON(url,{method:'POST',headers:{'Content-Type':'application/json'},...(['start','saved'].includes(action)?{body:JSON.stringify({...bulkBody(),...(action==='saved'?{mode:'saved'}:{})})}:{})});
     renderBulk(job);monitorBulk(job.job_id);
-  }catch(e){$('bulkStatus').textContent=e.message;toast(e.message);}
+  }catch(e){$('bulkStatus').textContent=e.message;toast(e.message);if(bulkState.job?.job_id&&(['queued','running','pausing'].includes(bulkState.job.status)||bulkState.job.export_status==='running'))monitorBulk(bulkState.job.job_id);}
   finally{bulkState.requesting=false;bulkControls();}
 }
 async function initBulk(){
@@ -441,7 +448,8 @@ async function initBulk(){
   $('bulkOrigins').innerHTML=options;$('bulkDestinations').innerHTML=options;
   [...$('bulkOrigins').options].forEach(o=>o.selected=o.value===$('originSelect').value);
   await updateBulkPlan();
-  try{const job=await getJSON('/api/bulk');renderBulk(job);if(job.status!=='idle'&&(['queued','running','pausing'].includes(job.status)||job.export_status==='running'))monitorBulk(job.job_id);}
+  const seq=++bulkState.viewSeq;
+  try{const job=await getJSON('/api/bulk');if(seq!==bulkState.viewSeq)return;renderBulk(job);if(job.status!=='idle'&&(['queued','running','pausing'].includes(job.status)||job.export_status==='running'))monitorBulk(job.job_id);}
   catch(e){$('bulkStatus').textContent=e.message;}
 }
 
@@ -542,6 +550,14 @@ async function monitorImportJob(jobId,seq,initial=null,recoverUpload=false){
       }
       if(seq!==importsState.seq||!$('importDialog').open)return;
       if(job.status==='ready'){renderImportPreview(job.preview);return;}
+      if(job.can_retry){
+        $('importMessage').textContent=job.message+' ';
+        const button=document.createElement('button');button.type='button';button.className='button secondary';button.textContent='Повторить распознавание';
+        button.addEventListener('click',async()=>{
+          try{button.disabled=true;const next=await getJSON('/api/import/jobs/'+encodeURIComponent(jobId)+'/retry',{method:'POST'});await monitorImportJob(jobId,seq,next);}
+          catch(error){$('importMessage').textContent=error.message;button.disabled=false;}
+        });$('importMessage').append(button);return;
+      }
       if(['error','interrupted','expired','committed'].includes(job.status)){
         forgetImportJob(jobId);importsState.jobId=null;$('importMessage').textContent=job.message||'Распознавание остановлено. Загрузите документ снова.';return;
       }

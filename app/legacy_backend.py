@@ -34,7 +34,8 @@ from .extended_sources import (
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-RUNTIME_DIR = Path(os.environ.get("TARIFF_DATA_DIR") or BASE_DIR / "runtime").expanduser().resolve()
+from .runtime_paths import runtime_directory
+RUNTIME_DIR = runtime_directory(BASE_DIR)
 CACHE_DIR = RUNTIME_DIR / "cache"
 EXPORT_DIR = RUNTIME_DIR / "exports"
 SETTINGS_PATH = RUNTIME_DIR / "settings.json"
@@ -1084,12 +1085,9 @@ def matrix_control_volume(weight: float) -> float:
 
 def load_settings() -> dict[str, str]:
     defaults = {key: os.getenv(env_name, "") for key, env_name in SETTINGS_DEFAULTS.items()}
-    if SETTINGS_PATH.exists():
-        try:
-            stored = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
-            defaults.update({k: str(v or "") for k, v in stored.items() if k in defaults})
-        except Exception:
-            pass
+    from .v42_engine import _read_json
+    stored=_read_json(SETTINGS_PATH,{})
+    defaults.update({k:str(v or '') for k,v in stored.items() if k in defaults})
     return defaults
 
 
@@ -1098,7 +1096,8 @@ def save_settings(payload: dict[str, Any]) -> dict[str, bool]:
     for key in SETTINGS_DEFAULTS:
         if key in payload:
             current[key] = str(payload.get(key) or "").strip()
-    SETTINGS_PATH.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    from .v42_engine import _robust_json_write
+    _robust_json_write(SETTINGS_PATH,current)
     return {k: bool(v) for k, v in current.items()}
 
 

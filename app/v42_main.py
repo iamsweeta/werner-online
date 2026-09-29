@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json, threading, uuid
+import json, threading, uuid, os, secrets, base64
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel,StrictStr,StrictInt,StrictFloat
 
@@ -21,19 +21,52 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="61.0"
+VERSION="63.0"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
 RUNTIME_DIR.mkdir(parents=True,exist_ok=True)
 
+from . import cloud_db,data_store
+if cloud_db.enabled():
+    data_store.configuration()
+    if len(os.environ.get('APP_PASSWORD',''))<12:
+        raise RuntimeError('Для облачного сервиса задайте APP_PASSWORD длиной не менее 12 символов в Render Environment.')
+    cloud_db.initialize()
+    from .route_import_jobs import recover
+    recover()
+
 app=FastAPI(title="Tariff Comparison — cities and routes",version=VERSION)
 app.mount("/static",StaticFiles(directory=str(STATIC_DIR)),name="static")
+
+@app.get('/storage-guide')
+def storage_guide():
+    return FileResponse(STATIC_DIR/'storage-help.html',media_type='text/html')
 @app.middleware('http')
 async def no_cache_ui_and_api(request:Request,call_next):
+    password=os.environ.get('APP_PASSWORD','')
+    if password and request.url.path!='/health':
+        try:
+            scheme,encoded=request.headers.get('authorization','').split(' ',1)
+            username,supplied=base64.b64decode(encoded,validate=True).decode('utf-8').split(':',1)
+            valid=scheme.lower()=='basic' and secrets.compare_digest(username.encode(),os.environ.get('APP_USERNAME','manager').encode()) and secrets.compare_digest(supplied.encode(),password.encode())
+        except (ValueError,UnicodeDecodeError):valid=False
+        if not valid:return Response('Требуется вход',status_code=401,headers={'WWW-Authenticate':'Basic realm="Tariff app", charset="UTF-8"','Cache-Control':'no-store'})
+        if request.method not in {'GET','HEAD','OPTIONS'}:
+            origin=request.headers.get('origin')
+            from urllib.parse import urlsplit
+            if origin and urlsplit(origin).netloc!=request.headers.get('host'):
+                return JSONResponse({'detail':'Запрос с другого сайта отклонён.'},status_code=403)
+    if cloud_db.enabled() and request.method not in {'GET','HEAD','OPTIONS'} and not request.url.path.startswith('/api/storage/'):
+        from .cloud_migration import WORKER
+        if WORKER and WORKER.is_alive():return JSONResponse({'detail':'Перенос резервной копии выполняется. Дождитесь завершения.'},status_code=409)
     response=await call_next(request)
     response.headers['Cache-Control']='no-store, no-cache, must-revalidate, max-age=0'
     return response
+
+@app.exception_handler(cloud_db.StorageUnavailable)
+async def storage_failure(request,exc):
+    return JSONResponse({'detail':str(exc),'code':'storage_unavailable'},status_code=503)
 
 ORIGINS=city_names()
 COLLECT_LOCK=threading.RLock(); COLLECT_JOBS:dict[str,dict[str,Any]]={}; EXACT_REVISION=0
@@ -54,11 +87,12 @@ def _validate_route(o:str,d:str)->tuple[str,str]:
     return o,d
 
 def _settings()->dict[str,Any]:
-    try:return json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
-    except:return {}
+    from .v42_engine import _read_json
+    return _read_json(SETTINGS_PATH,{})
 def _save_settings(data:dict[str,Any]):
     old=_settings(); old.update({k:v for k,v in data.items() if v not in (None,"")})
-    SETTINGS_PATH.write_text(json.dumps(old,ensure_ascii=False,indent=2),encoding="utf-8")
+    from .v42_engine import _robust_json_write,STATE_LOCK
+    with STATE_LOCK:_robust_json_write(SETTINGS_PATH,old)
 
 @app.get("/")
 def root():return FileResponse(STATIC_DIR/"index.html",headers={"Cache-Control":"no-store"})
@@ -200,9 +234,14 @@ class CollectRequest(BaseModel):
     background:bool=True
     force:bool=True
 
+def _save_collect_job(job):
+    from .v42_engine import _robust_json_write,_route_cfg
+    _robust_json_write(RUNTIME_DIR/'collect_jobs'/(_route_cfg(job['origin'],job['destination'])['slug']+'.json'),job)
+
+
 def _run_collect(key:str,selected:list[str],origin:str,destination:str):
     global EXACT_REVISION
-    job=COLLECT_JOBS[key]; job.update({"status":"running","started_at":_now(),"message":"Проверяю онлайн-источники для выбранного направления…"})
+    job=COLLECT_JOBS[key]; job.update({"origin":origin,"destination":destination,"status":"running","started_at":_now(),"message":"Проверяю онлайн-источники для выбранного направления…"})
     try:
         targets=list(selected)
         job["targets"]=targets; job["progress_rows"]=0
@@ -215,6 +254,7 @@ def _run_collect(key:str,selected:list[str],origin:str,destination:str):
                 job['progress_rows']=sum(int(x.get('rows') or 0) for x in by.values())
                 job['progress_revision']=int(job.get('progress_revision',0))+1
                 job['message']=result.get('message','')
+                _save_collect_job(job)
         results=collect_selected(targets,origin,destination,job.get("profile") or "w100",on_progress=progress,should_stop=lambda:job.get("stop_requested",False))
         job["results"]=results; job["progress_rows"]=sum(int(x.get("rows") or 0) for x in results)
         success=[x for x in results if x.get("ok")]
@@ -234,6 +274,9 @@ def _run_collect(key:str,selected:list[str],origin:str,destination:str):
         if job.get("stop_requested"):job["message"]="Загрузка остановлена. Полученные цены сохранены."
     except Exception as exc:
         job.update({"status":"error","finished_at":_now(),"message":f"Ошибка обновления: {type(exc).__name__}: {exc}"})
+    finally:
+        try:_save_collect_job(job)
+        except cloud_db.StorageUnavailable:pass
 
 @app.post("/api/collect")
 def collect(body:CollectRequest):
@@ -302,6 +345,11 @@ def bulk_history():
 @app.get("/api/collect-status")
 def collect_status(origin:str,destination:str):
     origin,destination=_validate_route(origin,destination); job=COLLECT_JOBS.get(_route_key(origin,destination))
+    if not job:
+        from .v42_engine import _read_json,_route_cfg
+        job=_read_json(RUNTIME_DIR/'collect_jobs'/(_route_cfg(origin,destination)['slug']+'.json'),{})
+        if job.get('status') in {'running','queued'}:
+            job.update(status='paused',message='Сервер перезапущен. Полученные цены сохранены; можно обновить оставшиеся компании.')
     if not job:return {"status":"idle","progress_rows":0,"exact_revision":EXACT_REVISION,"message":"Онлайн-обновление ещё не запускалось"}
     with COLLECT_LOCK:return json.loads(json.dumps(job))
 
@@ -403,7 +451,7 @@ def storage_backup():
     from .storage import backup
     from starlette.background import BackgroundTask
     path=backup()
-    return FileResponse(path,filename='tariff_documents_backup.zip',background=BackgroundTask(path.unlink,missing_ok=True))
+    return FileResponse(path,filename='tariff_data_backup.zip',background=BackgroundTask(path.unlink,missing_ok=True))
 
 
 @app.get('/api/price-documents/template')
@@ -452,8 +500,8 @@ def documents_remove(ident:str):
 def source_file(filename:str):
     from .legacy import DOWNLOAD_DIR
     path=(DOWNLOAD_DIR/filename).resolve()
-    if path.parent!=DOWNLOAD_DIR.resolve() or not path.is_file():raise HTTPException(404,'Файл источника не найден')
-    return FileResponse(path,filename=path.name)
+    if path.parent!=DOWNLOAD_DIR.resolve() or not data_store.exists(path):raise HTTPException(404,'Файл источника не найден')
+    return FileResponse(data_store.materialize(path),filename=path.name)
 
 @app.get("/api/diagnostics")
 def diagnostics(origin:str="Санкт-Петербург",destination:str="Москва",profile:str="w100"):
@@ -498,7 +546,7 @@ def diagnostics(origin:str="Санкт-Петербург",destination:str="Мо
 def diagnostics_download(origin:str='Санкт-Петербург',destination:str='Москва',profile:str='w100'):
     report=diagnostics(origin,destination,profile)
     return Response(json.dumps(report,ensure_ascii=False,indent=2).encode('utf-8'),media_type='application/json',
-                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_55_0.json"'})
+                    headers={'Content-Disposition':'attachment; filename="tariff_diagnostics_63_0.json"'})
 
 
 @app.get("/api/settings")
@@ -617,3 +665,53 @@ def manual_price_put(body:ManualPriceRequest):
 def manual_price_remove(body:ManualPriceRequest):
     from .manual_prices import remove
     return _bulk_call(remove,body.company,body.origin,body.destination,body.profile)
+
+
+@app.post('/api/storage/check')
+def storage_check():
+    if not cloud_db.enabled():return {'ok':True,'message':'Локальный режим. Для Render Free выберите облачное хранение.'}
+    result=data_store.check()
+    from .v42_engine import _robust_json_write
+    result['checked_at']=_now();_robust_json_write(RUNTIME_DIR/'system/storage_check.json',result)
+    return result
+
+
+@app.get('/api/storage/migration')
+def migration_status():
+    from .cloud_migration import status
+    return status()
+
+
+@app.post('/api/storage/migration')
+def migration_upload(file:UploadFile=File(...)):
+    import tempfile
+    from .cloud_migration import start
+    if not cloud_db.enabled():raise HTTPException(400,'Включите облачное хранение.')
+    try:
+        with tempfile.NamedTemporaryFile(dir=RUNTIME_DIR,suffix='.zip') as temp:
+            total=0
+            while chunk:=file.file.read(1024*1024):
+                total+=len(chunk)
+                if total>512*1024*1024:raise HTTPException(413,'Архив больше 512 МБ. Используйте cloud_setup.py migrate на компьютере.')
+                temp.write(chunk)
+            temp.flush()
+            return _bulk_call(start,Path(temp.name))
+    finally:file.file.close()
+
+
+@app.post('/api/storage/migration/retry')
+def migration_retry():
+    from .cloud_migration import start
+    return _bulk_call(start)
+
+
+@app.post('/api/import/jobs/{job_id}/retry')
+def import_job_retry(job_id:str):
+    from .route_import_jobs import retry
+    return _bulk_call(retry,job_id)
+
+
+@app.post('/api/price-documents/preview/{token}/retry')
+def documents_retry(token:str):
+    from .price_library import retry_preview
+    return _bulk_call(retry_preview,token)

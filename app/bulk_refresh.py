@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import sqlite3
 import threading
 import time
@@ -28,6 +29,7 @@ ACTIVE={'queued','running','pausing'}
 WEIGHTS=[p['id'] for p in e.COMMON_PROFILES if not p.get('is_minimum_profile')]
 PART_SIZE=200
 SINGLE_WORKBOOK_LIMIT=400
+EXPORT_SCHEMA=62
 
 
 def now():return datetime.now().astimezone().isoformat(timespec='seconds')
@@ -74,7 +76,8 @@ def capture_company(company, origin, destination, result):
         row=companies.get(company)
         if row:
             clean['profiles'][pid]={company:deepcopy(row)}
-    packs=({},clean,{})
+    # Online checkpoints must not freeze a manual override as site evidence.
+    packs=({'_manual':{'profiles':{}}},clean,{})
     items=[e._route_quote(company,origin,destination,p['id'],packs) for p in e.COMMON_PROFILES]
     for item in items:
         item['collected_online']=bool(item.get('online') and not result.get('snapshot'))
@@ -143,11 +146,8 @@ class BulkManager:
 
     @contextmanager
     def db(self):
-        db=sqlite3.connect(self.path,timeout=30)
-        db.row_factory=sqlite3.Row
-        try:
-            with db:yield db
-        finally:db.close()
+        from .cloud_db import connect
+        with connect(self.path,'bulk') as db:yield db
 
     def active(self):
         with self.db() as db:
@@ -171,7 +171,9 @@ class BulkManager:
             last=db.execute('SELECT idx,company,status,payload FROM results WHERE job=? ORDER BY rowid DESC LIMIT 18',(ident,)).fetchall()
         config=json.loads(job['config'])
         from .document_imports import revision
-        outdated=bool(job['export_status']=='ready' and (config.get('export_schema')!=59 or config.get('export_price_revision')!=e.price_revision() or (config.get('include_imports',True) and config.get('export_document_revision')!=revision())))
+        outdated=bool(job['export_status']=='ready' and (config.get('export_schema')!=EXPORT_SCHEMA or config.get('export_price_revision')!=e.price_revision() or (config.get('include_imports',True) and config.get('export_document_revision')!=revision())))
+        if job['export_status']=='ready' and not self._export_path(job).is_file():
+            job.update(export_status='error',message='Файл Excel не найден. Сохранённые цены доступны; нажмите «Создать Excel».')
         job.pop('config');job.pop('export_file')
         total=sum(counts.values());done=counts.get('done',0)
         job.update({'job_id':ident,'scope':config['scope'],'companies':config['companies'],
@@ -196,7 +198,7 @@ class BulkManager:
             config={'scope':scope,'origins':origins,'destinations':destinations,'companies':list(e.COMPANIES),'tariff_schema':53,
                     'mode':mode,'include_imports':bool(include_imports)}
             with self.db() as db:
-                db.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?)',
+                db.execute('INSERT INTO jobs(id,status,created_at,updated_at,config,message,export_status,export_file) VALUES (?,?,?,?,?,?,?,?)',
                            (ident,'queued',now(),now(),json.dumps(config,ensure_ascii=False),'В очереди','idle',None))
                 db.executemany('INSERT INTO routes(job,idx,origin,destination) VALUES (?,?,?,?)',
                                ((ident,i,o,d) for i,(o,d) in enumerate(routes)))
@@ -233,7 +235,7 @@ class BulkManager:
         payload=capture_company(company,o,d,result)
         raw=zlib.compress(json.dumps(payload,ensure_ascii=False).encode('utf-8'))
         with self.db() as db:
-            db.execute('INSERT OR REPLACE INTO results VALUES (?,?,?,?,?)',(ident,idx,company,payload['status'],raw))
+            db.execute('INSERT INTO results(job,idx,company,status,payload) VALUES (?,?,?,?,?) ON CONFLICT(job,idx,company) DO UPDATE SET status=excluded.status,payload=excluded.payload',(ident,idx,company,payload['status'],raw))
             db.execute('UPDATE jobs SET updated_at=? WHERE id=?',(now(),ident))
 
     def _run(self,ident):
@@ -309,11 +311,17 @@ class BulkManager:
                 for company in e.COMPANIES:
                     item=e._route_quote(company,o,d,p['id'],packs)
                     prior=by.get(company,{}).get(p['id'],{})
-                    item['collected_online']=bool(not item.get('manual') and not item.get('uploaded') and prior.get('collected_online') and item.get('captured_at')==prior.get('captured_at') and item.get('price')==prior.get('price'))
+                    item['collected_online']=bool(not item.get('manual') and not item.get('uploaded')
+                        and prior.get('collected_online') and item.get('refresh_status') in {'success','partial'}
+                        and item.get('live_attempt_id') and item.get('live_attempt_id')==prior.get('live_attempt_id')
+                        and all(item.get(k)==prior.get(k) for k in ('captured_at','price','published_rate_per_kg','minimum_charge','source_file','sha256')))
                     item['checked_at']=item.get('captured_at');item['bulk_status']='manual' if item.get('manual') else 'document' if item.get('uploaded') else 'saved'
                     items.append(item)
                 output.append({'profile':deepcopy(p),'items':items})
-            return output
+            # Calculators may provide a total but no published RUB/kg rate.
+            # A confirmed document can fill that Excel gap, while a published
+            # online rate and an explicit manual override keep their priority.
+            return fill_document_gaps(output,imports,o,d) if imports is not None else output
         output=[]
         for p in e.COMMON_PROFILES:
             items=[]
@@ -347,7 +355,7 @@ class BulkManager:
     def prepare_export(self,ident):
         with self.guard:
             job=self._job(ident)
-            if job['status'] in ACTIVE:raise BusyError('Сначала дождитесь окончания сбора или нажмите «Пауза»')
+            if self.active() or self.route_busy():raise BusyError('Сначала дождитесь окончания обновления или остановите сбор')
             if self.export_worker and self.export_worker.is_alive():raise BusyError('Excel уже создаётся')
             with self.db() as db:
                 db.execute("UPDATE jobs SET export_status='running',export_file=NULL WHERE id=?",(ident,))
@@ -375,8 +383,8 @@ class BulkManager:
             coverage={c:{'company':c,'online':0,'saved':0,'document':0,'manual':0,'missing':0} for c in e.COMPANIES}
             for number,part in enumerate(parts,1):
                 index={(r['origin'],r['destination']):r['idx'] for r in part}
-                # One version of user documents for the whole workbook. Online
-                # replies are already frozen in this collection's checkpoints.
+                # Freeze document inputs for this part. Revisions recorded
+                # before export prevent downloading it if data changes mid-run.
                 from .document_imports import pack as imported_pack
                 with e.STATE_LOCK:
                     documents={route:imported_pack(*route) for route in index} if info['include_imports'] else {}
@@ -387,6 +395,10 @@ class BulkManager:
                         for item in row['items']:
                             key=('manual' if item.get('manual') else 'document' if item.get('uploaded') else 'online' if item.get('collected_online') else 'saved') if tariff_value(item,row['profile']) is not None else 'missing'
                             coverage[item['company']][key]+=1
+                    if (index[(o,d)]+1)%25==0:
+                        with self.db() as db:
+                            db.execute('UPDATE jobs SET message=? WHERE id=?',
+                                (f'Создаю Excel: обработано {index[(o,d)]+1} из {len(all_routes)} маршрутов.',ident))
                     return rows
                 content=export_bytes(*next(iter(index)),list(e.COMPANIES),live_only=False,include_imports=False,
                                      routes_override=list(index),matrix_provider=matrix_for,
@@ -408,21 +420,34 @@ class BulkManager:
                     out.writestr('collection.json',json.dumps(info,ensure_ascii=False,indent=2).encode())
                     out.writestr('README.txt','Онлайн-данные на время проверки; пропуски дополнены подтверждёнными прайсами, если включены документы. Даты и источники — на листе Источники. Для обновления запустите новый общий сбор в приложении. Маршруты перечислены в routes.csv.'.encode('utf-8'))
                 temp.replace(output)
+            from .data_store import store_file
+            store_file(output)
             with self.db() as db:
                 config['export_document_revision']=document_revision
                 config['export_price_revision']=price_revision
-                config['export_schema']=59
+                config['export_schema']=EXPORT_SCHEMA
                 config['coverage']=list(coverage.values())
-                db.execute("UPDATE jobs SET export_status='ready',export_file=?,config=?,message='Excel готов. Даты проверки указаны в файле.' WHERE id=?",(str(output.resolve()),json.dumps(config,ensure_ascii=False),ident))
+                db.execute("UPDATE jobs SET export_status='ready',export_file=?,config=?,message='Excel готов. Даты проверки указаны в файле.' WHERE id=?",(str(output.relative_to(self.directory)),json.dumps(config,ensure_ascii=False),ident))
         except Exception as exc:
             with self.db() as db:
                 db.execute("UPDATE jobs SET export_status='error',message=? WHERE id=?",('Ошибка Excel: '+str(exc)[:1500],ident))
+
+    def _export_path(self,job):
+        # Store paths relative to TARIFF_DATA_DIR. Upgrade old absolute paths
+        # (including Windows paths) using only a known job directory/basename.
+        parts=str(job.get('export_file') or '').replace('\\','/').split('/')
+        if len(parts)<2 or parts[-2]!=job['id'] or not re.fullmatch(r'tariffs_(?:\d{3,}|all_routes)\.(?:xlsx|zip)',parts[-1]):
+            return self.directory/'__missing_export__'
+        file=(self.directory/job['id']/parts[-1]).resolve()
+        from .data_store import managed,exists,materialize
+        if managed(file) and exists(file):materialize(file)
+        return file if file.is_relative_to(self.directory.resolve()) else self.directory/'__missing_export__'
 
     def download(self,ident):
         job=self._job(ident)
         if self.status(ident).get('export_outdated'):raise ValueError('Данные изменились. Пересоберите Excel, чтобы включить последние сохранённые цены.')
         if job['export_status']!='ready' or not job['export_file']:raise ValueError('Excel ещё не готов')
-        file=Path(job['export_file']).resolve()
+        file=self._export_path(job)
         if not file.is_relative_to(self.directory.resolve()) or not file.is_file():raise ValueError('Файл выгрузки не найден')
         return file
 
@@ -437,7 +462,7 @@ def fill_document_gaps(rows,imports,origin,destination):
             if item.get('manual'):continue
             company=item['company'];value=imports.get('profiles',{}).get(pid,{}).get(company)
             pinned=bool(value and value.get('document_selected'))
-            if not pinned and item.get('collected_online') and tariff_value(item,row['profile']) is not None:continue
+            if not pinned and (item.get('collected_online') or item.get('online')) and tariff_value(item,row['profile']) is not None:continue
             if not value:continue
             imported=e._route_quote(company,origin,destination,pid,({}, {}, imports))
             if imported.get('comparison_value') is not None and (pinned or tariff_value(imported,row['profile']) is not None or item.get('comparison_value') is None):
@@ -450,10 +475,10 @@ def fill_document_gaps(rows,imports,origin,destination):
         candidates=[r['items'][pos] for r in rows if r['profile']['id']!='min' and r['items'][pos].get('comparison_value') is not None and not r['items'][pos].get('price_is_minimum')]
         if item.get('comparison_value') is not None and not item.get('price_is_minimum'):candidates.append(item)
         explicit=imports.get('profiles',{}).get('min',{}).get(company)
-        if explicit and (explicit.get('document_selected') or not item.get('collected_online')):
+        if explicit and (explicit.get('document_selected') or not (item.get('collected_online') or item.get('online'))):
             candidates.append(e._route_quote(company,origin,destination,'min',({}, {}, imports),derive_minimum=False))
         pools=([c for c in candidates if c.get('document_selected')],
-               [c for c in candidates if c.get('collected_online')],
+               [c for c in candidates if c.get('collected_online') or c.get('online')],
                [c for c in candidates if c.get('uploaded')],
                [c for c in candidates if not c.get('collected_online') and not c.get('uploaded')])
         pool=next((group for group in pools if any(c.get('profile_id') in {'min','w001'} for c in group)),[])

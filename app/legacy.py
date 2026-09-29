@@ -28,7 +28,8 @@ from fastapi.staticfiles import StaticFiles
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-RUNTIME_DIR = Path(os.environ.get("TARIFF_DATA_DIR") or BASE_DIR / "runtime").expanduser().resolve()
+from .runtime_paths import runtime_directory
+RUNTIME_DIR = runtime_directory(BASE_DIR)
 DOWNLOAD_DIR = RUNTIME_DIR / "downloads"
 EXPORT_DIR = RUNTIME_DIR / "exports"
 CACHE_DIR = RUNTIME_DIR / "cache"

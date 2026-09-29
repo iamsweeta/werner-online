@@ -1,0 +1,262 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Настройка Render и Neon — Тарифы 63</title><style>body{margin:0;background:#fff;color:#172336;font:16px/1.65 system-ui,sans-serif}main{max-width:1000px;margin:auto;padding:32px 22px 80px}h1{font-size:clamp(28px,5vw,40px);line-height:1.2}h2{margin-top:48px;padding-top:20px;border-top:1px solid #dbe2ed;font-size:26px}h3{font-size:21px}a{color:#245ad6}code{background:#f0f3f8;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{background:#f0f3f8;padding:18px;border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid #dbe2ed;padding:10px;text-align:left;vertical-align:top}th{background:#f0f3f8}li{margin:9px 0}@media(max-width:560px){main{padding:20px 14px}table{font-size:12px}td,th{padding:7px}h2{font-size:22px}}@media print{main{max-width:none;padding:0}h2,h3{break-after:avoid}pre,tr{break-inside:avoid}a{color:inherit}}</style></head><body><main><h1 id="63-render-free-neon">Версия 63: Render Free + Neon</h1>
+<p>Пошаговая настройка хранения цен и прайс-листов отдельно от сервера приложения.
+Проверено по документации провайдеров 28 сентября 2026 года.</p>
+<h2 id="_1">Что получится</h2>
+<p>Сайт и распознавание документов работают на Render. PostgreSQL в Neon хранит цены, маршруты, ручные изменения, библиотеку и результаты большой таблицы. Закрытый бакет Neon Object Storage хранит оригиналы и готовые большие Excel. После перезапуска Render приложение читает те же данные из облака. Повторно загружать подтверждённые прайсы не требуется.</p>
+<p>В бесплатном плане Neon на эту дату включены 0,5 ГБ PostgreSQL, 5 ГБ файлов и 100 CU-часов вычислений базы в месяц. Это лимиты, а не обещание бесплатной работы при любой нагрузке. Следите за Usage в Neon, особенно при сборе «Всех пар городов» и накоплении истории. Условия могут измениться.</p>
+<p>Render Free засыпает после 15 минут без входящих обращений; открытие после простоя может занимать около минуты. Длительное OCR по-прежнему ограничено CPU и памятью Render. Подключение внешней базы не превращает бесплатный сервер в постоянно работающий мощный сервер. Прерванный общий сбор продолжается кнопкой «Продолжить»; прерванное OCR можно повторить из принятого файла, пока не истёк предпросмотр.</p>
+<h2 id="0">0. Сначала сохранить данные со старого сайта</h2>
+<p><strong>Сделайте это до обновления кода, изменения тарифа, переменных или перезапуска Render.</strong></p>
+<ol>
+<li>Откройте действующий сайт → <strong>Прайс-листы</strong>.</li>
+<li>Нажмите <strong>Скачать резервную копию данных</strong>.</li>
+<li>Сохраните <code>tariff_data_backup.zip</code> на своём компьютере. Не удаляйте его после переноса.</li>
+<li>Запишите один известный маршрут, компанию и цену для контрольной проверки.</li>
+</ol>
+<p>В версии 62 резервная копия содержит документы, распознанные, ручные и онлайн-цены, выбор источников и историю большой таблицы. Копии старых версий могут содержать только документы и ручные цены: отсутствующие в архиве данные перенос не создаст. Секретные API-ключи перевозчиков и временные предпросмотры не включаются. Если старые данные уже исчезли и копии нет, нужно заново загрузить исходные прайсы.</p>
+<h2 id="1">1. Распаковать приложение на компьютере</h2>
+<ol>
+<li>Распакуйте <code>tariff_app_63_0.zip</code> целиком.</li>
+<li>Откройте папку <code>TARIFF_APP_V63_0</code>. В ней находятся <code>app</code>, <code>static</code>, <code>data</code>, <code>requirements.txt</code>, <code>configure_neon.py</code> и эта инструкция.</li>
+<li>Для помощника настройки нужен Python 3.11 или новее. На Windows при установке Python включите <strong>Add Python to PATH</strong>. Если приложение уже запускалось на компьютере, Python, вероятно, установлен.</li>
+</ol>
+<p><strong>Не загружайте ZIP приложения в раздел прайс-листов:</strong> там принимаются документы перевозчиков. Код приложения отправляется в GitHub, а резервная копия — в отдельную форму переноса после настройки.</p>
+<h2 id="2-neon">2. Создать бесплатный проект Neon</h2>
+<ol>
+<li>Откройте <a href="https://console.neon.tech/">Neon</a> и войдите/зарегистрируйтесь.</li>
+<li>Создайте проект, например <code>tariff-app</code>. Выберите <strong>Free</strong>.</li>
+<li>Провайдер: <strong>AWS</strong>. Регион: <strong>Europe (Frankfurt), eu-central-1</strong>. Этот регион поддерживает и PostgreSQL, и Object Storage. Для сервиса Render по возможности используйте Frankfurt, чтобы уменьшить задержку.</li>
+<li>Используйте одну рабочую ветку, обычно <strong>main</strong>, и одну базу, обычно <strong>neondb</strong>. Запомните выбранную ветку. Не удаляйте и не пересоздавайте её при ежемесячном обновлении прайсов.</li>
+<li>В проекте нажмите <strong>Connect</strong>. Выберите нужную ветку и базу. Включите <strong>Connection pooling</strong>, если переключатель доступен.</li>
+<li>Скопируйте полную connection string: она начинается с <code>postgresql://</code> и содержит <code>sslmode=require</code> (возможен дополнительный <code>channel_binding=require</code>). Нужна сама строка, без <code>psql</code>, без внешних кавычек. Сохраните её временно в надёжном месте.</li>
+<li>Для помощника настройки создайте <strong>Neon API key</strong> в настройках учётной записи / организации → <strong>API keys</strong>. Дайте ему доступ к выбранному проекту. Этот служебный ключ нужен только для создания закрытого файлового бакета и отдельного ключа Storage. Он не будет записан в приложение или Render.</li>
+</ol>
+<h2 id="3">3. Подготовить хранилище и файл настроек</h2>
+<p>Проще всего воспользоваться помощником из архива.</p>
+<p><strong>Windows</strong></p>
+<p>Дважды откройте <code>SETUP_CLOUD_WINDOWS.cmd</code>. Он установит библиотеку <code>requests</code> и запустит помощник. Если окно пишет, что Python не найден, установите Python с опцией Add Python to PATH и откройте командный файл снова.</p>
+<p><strong>macOS / Linux</strong>, из папки приложения:</p>
+<pre><code class="language-bash">python3 -m pip install requests
+python3 configure_neon.py
+</code></pre>
+<p>Дальше во всех системах:</p>
+<ol>
+<li>Вставьте connection string PostgreSQL из шага 2. При вводе символы скрыты — это нормально. Нажмите Enter.</li>
+<li>Вставьте служебный Neon API key. Ввод также скрыт.</li>
+<li>Из списка выберите номер проекта <code>tariff-app</code>.</li>
+<li>Выберите номер рабочей ветки <strong>main</strong> или вашей выбранной ветки.</li>
+<li>Помощник создаст новый <strong>private</strong>-бакет <code>tariff-prices-…</code>, отдельный ключ с правами чтения/записи Storage и файл <strong><code>render.env</code></strong> рядом с приложением.</li>
+<li>Откройте <code>render.env</code> в обычном текстовом редакторе. В нём уже заполнены настройки Render, логин <code>manager</code> и сгенерированный пароль сайта.</li>
+</ol>
+<p><strong><code>render.env</code> содержит пароли. Не добавляйте его в GitHub, не прикладывайте в чат и не отправляйте заказчику вместе с исходниками.</strong> В проекте есть <code>.gitignore</code>, но при ручной загрузке через браузер нужно самому исключить этот файл. Сделайте закрытую копию настроек у себя.</p>
+<p>Если <code>render.env</code> уже существует, помощник не перезапишет его. Для повторной настройки сначала сохраните прежний файл отдельно. Каждая успешная новая настройка создаёт отдельный бакет и ключ: не запускайте её ежемесячно. После успешной проверки сайта служебный API key для помощника можно отозвать; <strong>S3-ключ, указанный в <code>render.env</code>, отзывать нельзя</strong>, пока он используется приложением.</p>
+<h3 id="_2">Если настраивать вручную</h3>
+<p>В Neon → проект → выбранная ветка → <strong>Object storage</strong> → <strong>New bucket</strong> создайте бакет с доступом <strong>private</strong>. Получите Storage endpoint, регион и отдельные S3-учётные данные по <a href="https://neon.com/docs/storage/get-started">официальной инструкции</a>. Не путайте пароль базы, Neon API key и S3 secret key — это разные значения.</p>
+<table>
+<thead>
+<tr>
+<th>Переменная Render</th>
+<th>Что указать</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TARIFF_STORAGE</code></td>
+<td><code>cloud</code></td>
+</tr>
+<tr>
+<td><code>DATABASE_URL</code></td>
+<td>Полная PostgreSQL connection string с <code>sslmode=require</code></td>
+</tr>
+<tr>
+<td><code>S3_ENDPOINT_URL</code></td>
+<td>Полный <code>s3_endpoint</code> ветки Neon; не адрес консоли, без имени бакета</td>
+</tr>
+<tr>
+<td><code>S3_REGION</code></td>
+<td>Регион Storage из Neon, например <code>eu-central-1</code></td>
+</tr>
+<tr>
+<td><code>S3_BUCKET</code></td>
+<td>Имя закрытого бакета</td>
+</tr>
+<tr>
+<td><code>S3_ACCESS_KEY_ID</code></td>
+<td><code>token_id</code> ключа Storage; аналог <code>AWS_ACCESS_KEY_ID</code></td>
+</tr>
+<tr>
+<td><code>S3_SECRET_ACCESS_KEY</code></td>
+<td><code>s3_secret_access_key</code>; аналог <code>AWS_SECRET_ACCESS_KEY</code></td>
+</tr>
+<tr>
+<td><code>S3_PREFIX</code></td>
+<td><code>tariff-app</code>; впоследствии не менять</td>
+</tr>
+<tr>
+<td><code>APP_USERNAME</code></td>
+<td><code>manager</code></td>
+</tr>
+<tr>
+<td><code>APP_PASSWORD</code></td>
+<td>Сильный пароль сайта, не менее 12 символов</td>
+</tr>
+<tr>
+<td><code>TARIFF_DATA_DIR</code></td>
+<td><code>./runtime</code> — временный локальный кэш, постоянные данные находятся в облаке</td>
+</tr>
+<tr>
+<td><code>PYTHON_VERSION</code></td>
+<td><code>3.12.11</code></td>
+</tr>
+</tbody>
+</table>
+<p>Если Neon Storage недоступен в вашем регионе, создайте проект в поддерживаемом AWS-регионе. Приложение также поддерживает другие S3-совместимые хранилища (например, R2), но у них собственные лимиты и условия оплаты. В этом руководстве используется Neon.</p>
+<h2 id="4-github">4. Загрузить код в GitHub</h2>
+<p>Если Render уже связан с репозиторием приложения, обновите <strong>тот же репозиторий</strong>. Убедитесь, что резервная копия из шага 0 уже скачана: автоматическое развёртывание может начаться сразу после коммита. По возможности временно выключите Auto-Deploy в настройках сервиса.</p>
+<ol>
+<li>Откройте репозиторий GitHub. Для нового проекта создайте <strong>Private repository</strong>.</li>
+<li>Загрузите <strong>содержимое</strong> папки <code>TARIFF_APP_V63_0</code>, а не ZIP и не дополнительную внешнюю папку. Если загружаете через браузер: <strong>Add file → Upload files</strong>. Перенесите <code>app</code>, <code>static</code>, <code>data</code> и файлы в корне.</li>
+<li>В корне репозитория должны быть <code>requirements.txt</code>, <code>render.yaml</code>, <code>app/</code>, <code>static/</code>, <code>data/</code>. Обязательно сохраните <code>data/ocr</code> и <code>data/export_template.xlsx</code>.</li>
+<li>Не загружайте <code>runtime</code>, <code>.env</code>, <code>render.env</code>, резервные копии, виртуальные окружения и свои прайсы.</li>
+<li>Сделайте commit.</li>
+</ol>
+<p>Таблицы в PostgreSQL создаются приложением автоматически. SQL вручную выполнять не нужно. Цены не берутся из шаблона Excel: он используется для структуры и оформления.</p>
+<h2 id="5-render">5. Настроить Render</h2>
+<h3 id="render">Уже есть сайт на Render</h3>
+<ol>
+<li>Откройте <a href="https://dashboard.render.com/">Render Dashboard</a> → существующий Web Service.</li>
+<li>В <strong>Settings</strong> проверьте привязанный репозиторий и ветку с версией 63.</li>
+<li><strong>Root Directory</strong>: пусто, если <code>requirements.txt</code> лежит в корне репозитория. Если сохраняете внешнюю папку, укажите фактический путь к ней.</li>
+<li><strong>Build Command</strong>:</li>
+</ol>
+<pre><code class="language-bash">pip install -r requirements.txt
+</code></pre>
+<ol>
+<li><strong>Start Command</strong>:</li>
+</ol>
+<pre><code class="language-bash">python -m uvicorn app.v42_main:app --host 0.0.0.0 --port $PORT --workers 1
+</code></pre>
+<ol>
+<li><strong>Health Check Path</strong>: <code>/health</code>. Используйте один процесс и один экземпляр приложения.</li>
+<li><strong>Environment → Add from .env</strong>: вставьте содержимое локального <code>render.env</code>. Если этой кнопки нет, добавьте каждую переменную из таблицы вручную. Не вводите внешние кавычки как часть значения при ручном добавлении.</li>
+<li>Сохраните настройки и выполните <strong>Manual Deploy → Deploy latest commit</strong>. Дождитесь <strong>Live</strong>.</li>
+<li>Если был настроен Persistent Disk: <strong>не удаляйте его до успешного переноса и проверки резервной копии</strong>. При необходимости сначала разверните новый Free Web Service с тем же кодом и внешним облаком, проверьте данные, затем решайте судьбу старого сервиса. Платный сервис с диском не превращается в Free только из-за нового <code>render.yaml</code>.</li>
+</ol>
+<h3 id="_3">Создаёте новый сервис</h3>
+<p><strong>New → Web Service</strong> → подключите GitHub-репозиторий → Runtime <strong>Python 3</strong>, Instance Type <strong>Free</strong>. Задайте команды и переменные выше. Постоянный диск не требуется. Можно использовать Blueprint из <code>render.yaml</code>, но для обычной ручной настройки он необязателен.</p>
+<h2 id="6">6. Первый вход и проверка облака</h2>
+<ol>
+<li>Откройте адрес приложения <code>https://…onrender.com</code>.</li>
+<li>Браузер покажет окно входа. Логин: значение <code>APP_USERNAME</code> (обычно <code>manager</code>), пароль: значение <code>APP_PASSWORD</code> из <code>render.env</code> / Render Environment. Это пароль сайта, не Neon.</li>
+<li>Откройте <strong>Прайс-листы → Хранилище: проверка подключения и перенос резервной копии</strong>. Прямая ссылка — адрес вашего сайта + <code>/storage-guide</code>.</li>
+<li>Нажмите <strong>Проверить базу и файлы</strong>. Должно появиться сообщение об успешной записи и чтении пробного файла.</li>
+<li>В «Прайс-листах» должен отображаться статус <strong>Облачное хранение</strong>. Если увидите предупреждение о локальном диске, <code>TARIFF_STORAGE=cloud</code> не применился.</li>
+</ol>
+<p><strong>Не начинайте загружать новые прайсы или вводить цены, если собираетесь переносить резервную копию:</strong> перенос специально разрешён только в пустую базу.</p>
+<h2 id="7">7. Перенести старую резервную копию</h2>
+<p>На странице <code>/storage-guide</code>:</p>
+<ol>
+<li>Выберите сохранённый <code>tariff_data_backup.zip</code>.</li>
+<li>Нажмите <strong>Перенести резервную копию</strong>.</li>
+<li>Не закрывайте страницу до сообщения <strong>Архив принят</strong>. Затем идёт фоновая проверка и перенос; статус обновляется на этой странице.</li>
+<li>Дождитесь <strong>Перенос завершён</strong>.</li>
+<li>Откройте известный маршрут. Данные из файла и ручные цены должны появиться без онлайн-обновления.</li>
+<li>В большой таблице выберите <strong>Собрать Excel из сохранённых цен</strong>. Перенесённые старые готовые Excel пересоздаются: резервная копия содержит цены и историю, а не сами выгрузки.</li>
+</ol>
+<p>Если Render перезапустился, откройте <code>/storage-guide</code> снова и нажмите <strong>Продолжить перенос сохранённого архива</strong>, когда кнопка появится. Перенос записывает цены одной транзакцией: либо весь набор подтверждён, либо прежняя база не меняется. Загруженные, но ещё не привязанные служебные объекты могут оставаться в бакете до обслуживания.</p>
+<p>Сообщение <strong>В облачной базе уже есть данные</strong> защищает существующие цены. Не удаляйте их, чтобы обойти проверку. Используйте новый отдельный проект/базу и бакет для переноса либо оставьте текущие данные и добавляйте обычные прайсы через библиотеку.</p>
+<p>Если данных раньше не было, этот шаг пропускается: загружайте документы как обычно в «Прайс-листы», проверьте распознавание и нажмите «Применить цены из файла».</p>
+<h3 id="render_1">Крупная резервная копия или нестабильная связь с Render</h3>
+<p>Для ZIP больше 512 МБ или при проблемах HTTP перенесите данные напрямую с компьютера. Откройте терминал в папке приложения, где находится <code>render.env</code>:</p>
+<pre><code class="language-bash">python -m pip install -r requirements.txt
+python cloud_setup.py check --env render.env
+python cloud_setup.py migrate &quot;C:/Users/YourName/Downloads/tariff_data_backup.zip&quot; --env render.env
+</code></pre>
+<p>На macOS/Linux используйте <code>python3</code> и фактический путь. Лимит распакованной копии — 2 ГБ / 100 000 файлов. На время переноса не работайте с ценами в приложении. При недостаточном лимите Neon операция выдаст ошибку; не считайте перенос завершённым, пока не появилось <code>ok: true</code>.</p>
+<h2 id="8">8. Обязательная контрольная проверка</h2>
+<ol>
+<li>Найдите прежнюю цену в известном маршруте.</li>
+<li>В библиотеке скачайте оригинальный PDF/XLSX/CSV — он должен открыться.</li>
+<li>Скачайте Excel отдельного маршрута и большую таблицу из сохранённых цен.</li>
+<li>Перезапустите сервис Render.</li>
+<li>Откройте сайт снова. Проверьте ту же цену, оригинал и историю большой таблицы <strong>без нового онлайн-сбора</strong>.</li>
+<li>Скачайте новую резервную копию и храните отдельно от облачных учётных данных.</li>
+</ol>
+<h2 id="_4">Как пользоваться дальше</h2>
+<ul>
+<li>Прайсы обновляются по вашей кнопке. Новая неудачная онлайн-проверка не удаляет последние успешные цены; актуальность показывается отдельно.</li>
+<li>Один подтверждённый документ работает и для отдельных маршрутов, и для большой таблицы.</li>
+<li>Подтверждённые документы и цены не удаляются приложением через месяц. Их сохранность зависит также от сохранения аккаунта/проекта Neon и соблюдения лимитов провайдера.</li>
+<li>Отключение прайса убирает его из сравнения, но сохраняет оригинал. История занимает место; отслеживайте Usage.</li>
+<li>Неподтверждённый предпросмотр действителен 30 минут после распознавания. Прерванный OCR запускается заново из принятого файла, а не с точностью до последней строки страницы.</li>
+<li>Скачанный Excel сам не обновляется. После изменения данных скачайте новую версию.</li>
+<li>Не меняйте <code>DATABASE_URL</code>, бакет, ветку или <code>S3_PREFIX</code> без отдельного переноса. Подключение другого пустого проекта покажет пустую таблицу.</li>
+<li>Делайте резервную копию перед крупным обновлением и после ежемесячного импорта. Бесплатный тариф сам по себе не заменяет резервное копирование.</li>
+</ul>
+<h2 id="_5">Частые проблемы</h2>
+<table>
+<thead>
+<tr>
+<th>Симптом</th>
+<th>Что проверить</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Сайт не запускается, ошибка <code>APP_PASSWORD</code></td>
+<td>В Render задан пароль не короче 12 символов; выполнено новое развёртывание</td>
+</tr>
+<tr>
+<td>Ошибка базы / <code>DATABASE_URL</code></td>
+<td>Полная строка PostgreSQL, пароль, <code>sslmode=require</code>, правильная ветка, свободный лимит Neon</td>
+</tr>
+<tr>
+<td>Цены видны, оригиналы недоступны</td>
+<td>S3 endpoint, регион, имя бакета и отдельные Storage-ключи; выполните «Проверить базу и файлы»</td>
+</tr>
+<tr>
+<td>Storage возвращает 404 при настройке</td>
+<td>Выбрана поддерживаемая AWS-локация, например Frankfurt; проект/ветка существуют</td>
+</tr>
+<tr>
+<td>После обновления всё пусто</td>
+<td>Не подключён ли другой проект/ветка; выполнен ли перенос; установлен ли <code>TARIFF_STORAGE=cloud</code></td>
+</tr>
+<tr>
+<td>При первом открытии долго загружается</td>
+<td>Render Free просыпается. Подождите около минуты</td>
+</tr>
+<tr>
+<td>Общий сбор остановлен</td>
+<td>Откройте его историю и нажмите «Продолжить»; подтверждённые результаты остаются</td>
+</tr>
+<tr>
+<td>OCR прерван</td>
+<td>Повторите распознавание сохранённого файла в интерфейсе. При истёкшем предпросмотре загрузите файл заново</td>
+</tr>
+<tr>
+<td>Недостаточно места в Neon</td>
+<td>Посмотрите Usage. Для большого числа историй/всех пар городов бесплатного лимита может не хватить</td>
+</tr>
+<tr>
+<td>Перенос через сайт даёт 502</td>
+<td>Откройте страницу статуса снова; если нужно, используйте прямой перенос <code>cloud_setup.py</code> с компьютера</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_6">Локальный режим и обратный перенос</h2>
+<p>Без <code>TARIFF_STORAGE=cloud</code> приложение работает с локальной SQLite и папками, как раньше. Для локального восстановления облачной копии:</p>
+<pre><code class="language-bash">python restore_data.py tariff_data_backup.zip --target restored-data
+</code></pre>
+<p>Затем задайте <code>TARIFF_STORAGE=local</code>, <code>TARIFF_DATA_DIR</code> равным абсолютному пути к <code>restored-data</code>. На Render в локальном режиме нужен платный Persistent Disk. Если хотите облачную базу, не переключайтесь в local при ошибке подключения — это создаст отдельное хранилище и расхождение данных.</p>
+<h2 id="_7">Источники и границы проверки</h2>
+<ul>
+<li><a href="https://render.com/docs/free">Render: бесплатные сервисы и ограничения</a></li>
+<li><a href="https://render.com/docs/deploy-fastapi">Render: запуск FastAPI</a></li>
+<li><a href="https://neon.com/docs/get-started-with-neon/signing-up">Neon: создание проекта</a></li>
+<li><a href="https://neon.com/docs/introduction/plans">Neon: тарифы и квоты</a></li>
+<li><a href="https://neon.com/docs/storage/get-started">Neon Object Storage: настройка</a></li>
+<li><a href="https://neon.com/docs/storage/buckets">Neon: закрытые бакеты</a></li>
+<li><a href="https://neon.com/docs/storage/s3-compatibility">Neon: совместимость S3</a></li>
+</ul>
+<p>Код проверен локальными и интеграционными тестами. Интеграции PostgreSQL проверялись на PGlite с PostgreSQL wire protocol, файлы — на S3-эмуляторе Moto. Это не проверка вашего живого аккаунта Neon или развёртывание на Render: финальную проверку реального подключения выполняет кнопка «Проверить базу и файлы» и шаг 8 после вашей настройки.</p></main></body></html>

@@ -41,3 +41,10 @@ html[data-theme=light] :is(.app-shell,.sidebar,.topbar,.page,.card,.table-wrap,.
 .graph-controls{display:flex;flex-wrap:wrap;gap:12px}.graph-controls label{display:grid;gap:6px;min-width:0;flex:1}.graph-controls select{max-width:100%;width:100%}.chart-card,.rate-chart{min-width:0}.graph-head{flex-wrap:wrap}@media(max-width:520px){.graph-controls{margin-top:12px;gap:8px}.graph-controls label{flex-basis:100%}.graph-legend{gap:5px}.graph-legend-item{min-height:34px;padding:5px 7px}.graph-legend-item span{font-size:10px}.chart-card .weight-window{margin-top:12px;padding:10px}}
 
 .manager-details>summary{cursor:pointer;font-weight:650}.manager-details>section{padding:16px 0 0;border:0;box-shadow:none}.manager-details .summary-card{margin:0}.import-apply-actions{position:sticky;bottom:0;background:var(--surface);padding:14px 0;margin:12px 0 0;display:flex;flex-wrap:wrap;z-index:2}.import-apply-actions .applied-feedback{flex-basis:100%;margin:0}.route-workspace>.applied-feedback{margin:0 0 16px}.manager-details:not([open]){padding-top:16px;padding-bottom:16px}
+
+/* Persistent-storage problems must be visible outside collapsed details. */
+.storage-warning{border:1px solid var(--warn);background:var(--surface);border-radius:12px;padding:18px;margin-bottom:18px;color:var(--text)}
+.storage-warning p{margin:8px 0 14px;line-height:1.6;font-size:13px;overflow-wrap:anywhere}
+.storage-warning .text-button{margin-left:12px}
+.controls-card>.filters>.unit-mode-note{grid-column:1/-1;grid-row:2}
+@media(max-width:520px){.controls-card>.filters>.unit-mode-note{grid-row:auto}.storage-warning a{display:block;margin:10px 0 0!important}}

@@ -39,6 +39,7 @@ def put(company,origin,destination,profile,value,unit):
         e._robust_json_write(path(o,d),current)
         from .document_imports import bump_revision
         bump_revision()
+        e.bump_price_revision()
     return {'ok':True,'company':company,'origin':o,'destination':d,'profile':profile,'value':float(number),'unit':unit,'saved_at':row['captured_at']}
 
 
@@ -57,6 +58,7 @@ def clear_covered(company,origin,destination,profiles):
             e._robust_json_write(path(origin,destination),current)
             from .document_imports import bump_revision
             bump_revision()
+            e.bump_price_revision()
         return count
 
 

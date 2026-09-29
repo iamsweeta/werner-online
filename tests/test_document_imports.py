@@ -67,12 +67,15 @@ class ImportLifecycle(unittest.TestCase):
             self.assertIsNone(self.quote()['price'])
         p=self.preview(table(rows=((100,None),(200,456))))
         self.assertEqual(p.status_code,200);self.assertEqual(len(p.json()['rows']),1)
-    def test_expired_reused_and_tampered_preview_rejected(self):
+    def test_expired_and_tampered_preview_rejected_repeated_commit_is_safe(self):
         data=self.preview().json();p=imports._token_path(data['token']);saved=json.loads(p.read_text());saved['meta']['created_at']='2000-01-01T00:00:00+00:00';p.write_text(json.dumps(saved))
         self.assertEqual(self.commit(data).status_code,400)
         data=self.preview().json();imports._token_path(data['token']).with_suffix('.xlsx').write_bytes(b'tampered')
         self.assertEqual(self.commit(data).status_code,400)
-        data=self.preview().json();self.assertEqual(self.commit(data).status_code,200);self.assertEqual(self.commit(data).status_code,400)
+        data=self.preview().json();self.assertEqual(self.commit(data).status_code,200)
+        revision=imports.revision();repeat=self.commit(data)
+        self.assertEqual(repeat.status_code,200);self.assertTrue(repeat.json()['already_applied'])
+        self.assertEqual(imports.revision(),revision)
         self.assertEqual(self.client.post('/api/import/commit',json={'token':'../../settings'}).status_code,400)
     def test_empty_wrong_extension_oversized_zip_and_scan(self):
         for raw,name in [(b'', 'x.pdf'),(b'<html>401</html>','x.pdf'),(b'MZ','x.exe'),(b'PKbad','x.xlsx')]:self.assertEqual(self.preview(raw,name).status_code,400)

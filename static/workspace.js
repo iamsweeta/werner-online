@@ -10,7 +10,7 @@ function setWorkspace(name,{focus=false}={}){
   const labels={bulk:['Большая таблица','Обновление тарифов в формате заказчика'],route:['Один маршрут','Сравнение компаний и отдельный Excel'],documents:['Прайс-листы','Документы для заполнения недостающих цен']};
   wsEl('workspaceTitle').textContent=labels[name][0];wsEl('workspaceSubtitle').textContent=labels[name][1];
   if(focus)wsEl('workspaceTitle').focus({preventScroll:true});
-  if(name==='documents')refreshDocuments();
+  if(name==='documents'){refreshDocuments();refreshStorageInfo();}
   if(name==='bulk'){refreshBulkAfterDocuments();loadBulkHistory();}
   if(name==='route'&&state.options){compare();}
 }
@@ -29,7 +29,20 @@ async function initWorkspace(){
   documentGuide();updateThemeButton();
   setWorkspace('route');
   await refreshDocuments();
-  getJSON('/api/storage').then(info=>{if(wsEl('storageInfo'))wsEl('storageInfo').textContent=`${info.files} оригиналов · ${(info.bytes/1024/1024).toFixed(1)} МБ. ${info.confirmed_retention} ${info.disabled_retention} Предпросмотр действует 30 минут. Папка: ${info.location}`;}).catch(()=>{});
+  refreshStorageInfo();
+  restoreDocumentPreview();
+}
+async function refreshStorageInfo(){
+  try{
+    const info=await getJSON('/api/storage');
+    if(wsEl('storageInfo'))wsEl('storageInfo').textContent=`${info.files} оригиналов · ${(info.bytes/1024/1024).toFixed(1)} МБ. ${info.persistence?.message||info.confirmed_retention} ${info.disabled_retention}${info.persistence?.persistence_status==='cloud'?'':' Папка данных: '+(info.data_directory||info.location)}`;
+    if(wsEl('storageWarning')){
+      wsEl('storageWarning').hidden=!info.persistence?.needs_attention;
+      wsEl('storageWarningText').textContent=info.persistence?.message||'';
+    }
+  }catch{
+    if(wsEl('storageInfo'))wsEl('storageInfo').textContent='Не удалось проверить хранилище. Проверьте подключение к серверу и повторите открытие раздела.';
+  }
 }
 function documentGuide(){
   const guide=state.options?.import_guide?.[wsEl('documentCompany').value];
@@ -101,6 +114,7 @@ async function parsePriceDocument(){
     const form=new FormData();files.forEach(file=>form.append(files.length===1?'file':'files',file));form.append('company',wsEl('documentCompany').value);
     form.append('origin',wsEl('documentOrigin').value);form.append('document_date',wsEl('documentDate').value);
     let job=await getJSON('/api/price-documents/preview',{method:'POST',body:form});
+    localStorage.setItem('tariff_document_job',job.token);
     while(job.status==='parsing'){
       if(seq!==documentState.seq)return;
       wsEl('documentMessage').textContent=job.total?`Проверено направлений: ${job.done}/${job.total}. Распознано: ${job.matched}.`:(job.message||'Читаю документ и определяю маршруты…');
@@ -117,7 +131,7 @@ async function commitPriceDocument(){
   documentBusy(true);
   try{
     const result=await getJSON('/api/price-documents/commit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:documentState.job.token,resolutions:documentState.resolutions})});
-    documentState.job.status='committed';wsEl('documentPreview').hidden=true;
+    documentState.job.status='committed';localStorage.removeItem('tariff_document_job');wsEl('documentPreview').hidden=true;
     wsEl('documentMessage').textContent=`Сохранено: ${result.route_count} маршрутов, ${result.values_count} цен. Прайс доступен в «Одном маршруте» и большой таблице. Внизу можно открыть любое его направление.`;
     showDocumentPrices();
     await refreshDocuments();await refreshBulkAfterDocuments();await compare();
@@ -133,7 +147,14 @@ function renderCoverage(job){
   }));
 }
 async function refreshBulkAfterDocuments(){
-  try{const job=await getJSON('/api/bulk');renderBulk(job);}catch{}
+  if(bulkState.requesting)return;
+  const seq=++bulkState.viewSeq,id=bulkState.job?.job_id;
+  try{
+    const job=await getJSON(id?'/api/bulk/'+encodeURIComponent(id):'/api/bulk');
+    if(seq!==bulkState.viewSeq)return;
+    stopBulkMonitor();renderBulk(job);
+    if(['queued','running','pausing'].includes(job.status)||job.export_status==='running')monitorBulk(job.job_id);
+  }catch{}
 }
 async function refreshDocuments(){
   const seq=(documentState.listSeq||0)+1;documentState.listSeq=seq;
@@ -260,7 +281,37 @@ async function loadBulkHistory(){
     const states={paused:'На паузе',done:'Завершено',error:'Прервано',running:'Идёт загрузка',queued:'В очереди',pausing:'Остановка'};
     wsEl('bulkHistory').innerHTML=(result.jobs||[]).map(j=>`<div class="history-row"><span>${escapeHtml(names[j.scope]||j.scope)} · ${escapeHtml(states[j.status]||j.status)}<small>${escapeHtml(new Date(j.created_at).toLocaleString('ru-RU'))}</small></span><button type="button" class="text-button" data-history-job="${escapeHtml(j.job_id)}">Открыть</button></div>`).join('')||'<p>Пока нет загрузок.</p>';
     wsEl('bulkHistory').querySelectorAll('[data-history-job]').forEach(button=>button.addEventListener('click',async()=>{
-      try{if(state.bulkActive){toast('Сначала остановите текущую загрузку.');return;}renderBulk(await getJSON('/api/bulk/'+encodeURIComponent(button.dataset.historyJob)));}catch(e){toast(e.message);}
+      if(state.bulkActive||bulkState.requesting||bulkState.job?.export_status==='running'){toast('Дождитесь создания Excel или остановите текущую загрузку.');return;}
+      const seq=++bulkState.viewSeq;stopBulkMonitor();
+      try{
+        const job=await getJSON('/api/bulk/'+encodeURIComponent(button.dataset.historyJob));
+        if(seq!==bulkState.viewSeq)return;
+        renderBulk(job);
+        if(['queued','running','pausing'].includes(job.status)||job.export_status==='running')monitorBulk(job.job_id);
+      }catch(e){if(seq===bulkState.viewSeq)toast(e.message);}
     }));
   }catch{wsEl('bulkHistory').textContent='История временно недоступна. Сохранённые цены остаются в таблице.';}
+}
+
+
+async function restoreDocumentPreview(retry=false){
+  const token=localStorage.getItem('tariff_document_job');if(!token||documentState.busy)return;
+  documentBusy(true);const seq=++documentState.seq;
+  try{
+    let job=await getJSON('/api/price-documents/preview/'+encodeURIComponent(token)+(retry?'/retry':''),retry?{method:'POST'}:{});
+    while(job.status==='parsing'){
+      if(seq!==documentState.seq)return;
+      wsEl('documentMessage').textContent=job.message||'Распознавание продолжается…';
+      await new Promise(resolve=>setTimeout(resolve,1500));
+      job=await getJSON('/api/price-documents/preview/'+encodeURIComponent(token));
+    }
+    if(seq!==documentState.seq)return;
+    if(job.status==='ready'){renderDocumentPreview(job);wsEl('documentMessage').textContent='Прайс распознан. Проверьте цены и примените файл.';}
+    else if(['interrupted','error'].includes(job.status)){
+      wsEl('documentMessage').textContent=job.message+' ';
+      const button=document.createElement('button');button.type='button';button.className='button secondary';button.textContent='Повторить распознавание сохранённого файла';
+      button.addEventListener('click',()=>restoreDocumentPreview(true));wsEl('documentMessage').append(button);
+    }else localStorage.removeItem('tariff_document_job');
+  }catch(error){wsEl('documentMessage').textContent=error.message;}
+  finally{documentBusy(false);}
 }

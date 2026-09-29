@@ -1,4 +1,4 @@
-"""Confirmed multi-route price documents. SQLite commits all routes atomically."""
+"""Confirmed multi-route price documents with SQLite/PostgreSQL persistence."""
 from __future__ import annotations
 from .business_time import tariff_today
 import hashlib,json,re,sqlite3,threading,time,uuid,io,zipfile
@@ -7,10 +7,27 @@ from datetime import date
 from pathlib import Path
 from . import v42_engine as e
 from . import tariff_documents as t
+from . import cloud_db,data_store
 from .cities import city_names,city_pattern
 
 JOBS={};LOCK=threading.RLock();MAX_ROUTES=2000
 _MIGRATED=set()
+_INSTANCE=uuid.uuid4().hex
+_JOB_SAVED={}
+
+
+def _save_job(token,force=False):
+    if not cloud_db.enabled():return
+    if not force and time.monotonic()-_JOB_SAVED.get(token,0)<3:return
+    with LOCK:snapshot=json.loads(json.dumps(JOBS[token]))
+    e._robust_json_write(root()/'library_jobs'/(token+'.json'),snapshot)
+    _JOB_SAVED[token]=time.monotonic()
+
+
+def committed(ident):
+    with db() as conn:row=conn.execute('SELECT meta FROM files WHERE id=? AND active=1',(_id(ident),)).fetchone()
+    return json.loads(row['meta']) if row else None
+
 
 
 def root():return e.RUNTIME_DIR/'imports'
@@ -18,18 +35,14 @@ def root():return e.RUNTIME_DIR/'imports'
 
 @contextmanager
 def db():
-    root().mkdir(parents=True,exist_ok=True)
-    conn=sqlite3.connect(root()/'documents.sqlite3',timeout=30);conn.row_factory=sqlite3.Row
-    try:
-        with conn:
-            conn.executescript('''CREATE TABLE IF NOT EXISTS files(id TEXT PRIMARY KEY,company TEXT,meta TEXT,active INTEGER);
-              CREATE TABLE IF NOT EXISTS prices(file TEXT,origin TEXT,destination TEXT,profile TEXT,payload TEXT,PRIMARY KEY(file,origin,destination,profile));
-              CREATE INDEX IF NOT EXISTS document_route ON prices(origin,destination);
-              CREATE TABLE IF NOT EXISTS excluded(company TEXT,origin TEXT,destination TEXT,PRIMARY KEY(company,origin,destination));
-              CREATE TABLE IF NOT EXISTS route_documents(company TEXT,origin TEXT,destination TEXT,file TEXT,
-                PRIMARY KEY(company,origin,destination));''')
-            yield conn
-    finally:conn.close()
+    from .cloud_db import connect
+    with connect(root()/'documents.sqlite3','documents') as conn:
+        conn.executescript('''CREATE TABLE IF NOT EXISTS files(id TEXT PRIMARY KEY,company TEXT,meta TEXT,active INTEGER);
+          CREATE TABLE IF NOT EXISTS prices(file TEXT,origin TEXT,destination TEXT,profile TEXT,payload TEXT,PRIMARY KEY(file,origin,destination,profile));
+          CREATE INDEX IF NOT EXISTS document_route ON prices(origin,destination);
+          CREATE TABLE IF NOT EXISTS excluded(company TEXT,origin TEXT,destination TEXT,PRIMARY KEY(company,origin,destination));
+          CREATE TABLE IF NOT EXISTS route_documents(company TEXT,origin TEXT,destination TEXT,file TEXT,PRIMARY KEY(company,origin,destination));''')
+        yield conn
 
 
 def _id(value):
@@ -40,7 +53,7 @@ def _id(value):
 def pack(origin,destination):
     origin,destination=e.route_pair(origin,destination)
     migrate_legacy(origin,destination)
-    if not (root()/'documents.sqlite3').exists():return {'profiles':{},'companies':{}}
+    if not cloud_db.enabled() and not (root()/'documents.sqlite3').exists():return {'profiles':{},'companies':{}}
     with db() as conn:
         rows=conn.execute('''SELECT f.id,f.rowid AS sequence,f.company,f.meta,f.active,p.profile,p.payload
           FROM prices p JOIN files f ON f.id=p.file WHERE p.origin=? AND p.destination=? ORDER BY f.rowid''',(origin,destination)).fetchall()
@@ -72,9 +85,9 @@ def migrate_legacy(origin=None,destination=None):
     """Register confirmed pre-53 route files once, preserving originals and revisions."""
     with e.STATE_LOCK:
         from .document_imports import route_path
-        paths=[route_path(origin,destination)] if origin and destination else (root()/'routes').glob('*.json')
+        paths=[route_path(origin,destination)] if origin and destination else data_store.paths(root()/'routes','*.json')
         for path in paths:
-            try:signature=(str(path.resolve()),path.stat().st_mtime_ns,path.stat().st_size)
+            try:signature=(str(path.resolve()),) if cloud_db.enabled() else (str(path.resolve()),path.stat().st_mtime_ns,path.stat().st_size)
             except FileNotFoundError:continue
             if signature in _MIGRATED:continue
             data=e._read_json(path,{})
@@ -91,8 +104,8 @@ def migrate_legacy(origin=None,destination=None):
                 saved={**meta,'uploaded':True,'route_count':1,'values_count':len(values)}
                 with db() as conn:
                     if conn.execute('SELECT 1 FROM files WHERE id=?',(filename.split('.')[0],)).fetchone():continue
-                    conn.execute('INSERT INTO files VALUES (?,?,?,1)',(filename.split('.')[0],company,json.dumps(saved,ensure_ascii=False)))
-                    for pid,value in values.items():conn.execute('INSERT INTO prices VALUES (?,?,?,?,?)',(filename.split('.')[0],o,d,pid,json.dumps(value,ensure_ascii=False)))
+                    conn.execute('INSERT INTO files(id,company,meta,active) VALUES (?,?,?,1)',(filename.split('.')[0],company,json.dumps(saved,ensure_ascii=False)))
+                    for pid,value in values.items():conn.execute('INSERT INTO prices(file,origin,destination,profile,payload) VALUES (?,?,?,?,?)',(filename.split('.')[0],o,d,pid,json.dumps(value,ensure_ascii=False)))
             _MIGRATED.add(signature)
 
 
@@ -100,10 +113,10 @@ def register_single(ident,meta,values,origin,destination):
     migrate_legacy()
     saved={**meta,'uploaded':True,'route_count':1,'values_count':len(values)}
     with db() as conn:
-        conn.execute('INSERT INTO files VALUES (?,?,?,1)',(ident,meta['company'],json.dumps(saved,ensure_ascii=False)))
-        for pid,value in values.items():conn.execute('INSERT INTO prices VALUES (?,?,?,?,?)',(ident,origin,destination,pid,json.dumps(value,ensure_ascii=False)))
+        conn.execute('INSERT INTO files(id,company,meta,active) VALUES (?,?,?,1)',(ident,meta['company'],json.dumps(saved,ensure_ascii=False)))
+        for pid,value in values.items():conn.execute('INSERT INTO prices(file,origin,destination,profile,payload) VALUES (?,?,?,?,?)',(ident,origin,destination,pid,json.dumps(value,ensure_ascii=False)))
         conn.execute('DELETE FROM excluded WHERE company=? AND origin=? AND destination=?',(meta['company'],origin,destination))
-        conn.execute('INSERT OR REPLACE INTO route_documents VALUES (?,?,?,?)',(meta['company'],origin,destination,ident))
+        conn.execute('INSERT INTO route_documents(company,origin,destination,file) VALUES (?,?,?,?) ON CONFLICT(company,origin,destination) DO UPDATE SET file=excluded.file',(meta['company'],origin,destination,ident))
     return saved
 
 
@@ -143,7 +156,7 @@ def select_document(company,origin,destination,document_id=None):
                 match=conn.execute('''SELECT 1 FROM files f JOIN prices p ON p.file=f.id
                   WHERE f.id=? AND f.company=? AND f.active=1 AND p.origin=? AND p.destination=? LIMIT 1''',(_id(document_id),company,origin,destination)).fetchone()
                 if not match:raise ValueError('В этом документе нет подтверждённых цен выбранной компании и направления')
-                conn.execute('INSERT OR REPLACE INTO route_documents VALUES (?,?,?,?)',(company,origin,destination,document_id))
+                conn.execute('INSERT INTO route_documents(company,origin,destination,file) VALUES (?,?,?,?) ON CONFLICT(company,origin,destination) DO UPDATE SET file=excluded.file',(company,origin,destination,document_id))
             else:conn.execute('DELETE FROM route_documents WHERE company=? AND origin=? AND destination=?',(company,origin,destination))
             conn.execute('DELETE FROM excluded WHERE company=? AND origin=? AND destination=?',(company,origin,destination))
         from .document_imports import bump_revision
@@ -160,13 +173,13 @@ def select_document(company,origin,destination,document_id=None):
 
 
 def disable_route(company,origin,destination):
-    if (root()/'documents.sqlite3').exists():
-        with db() as conn:conn.execute('INSERT OR REPLACE INTO excluded VALUES (?,?,?)',(company,origin,destination))
+    if cloud_db.enabled() or (root()/'documents.sqlite3').exists():
+        with db() as conn:conn.execute('INSERT INTO excluded(company,origin,destination) VALUES (?,?,?) ON CONFLICT(company,origin,destination) DO NOTHING',(company,origin,destination))
 
 
 def list_files():
     migrate_legacy()
-    if not (root()/'documents.sqlite3').exists():return []
+    if not cloud_db.enabled() and not (root()/'documents.sqlite3').exists():return []
     with db() as conn:rows=conn.execute('SELECT id,meta FROM files WHERE active=1 ORDER BY rowid DESC').fetchall()
     return [{'id':r['id'],**json.loads(r['meta'])} for r in rows]
 
@@ -293,7 +306,7 @@ def parse_routes(raw,filename,company,origin=None,on_progress=None,conflicts=Non
         return output,errors
 
 
-def start_preview(raw,filename,company,origin=None,document_date=None):
+def start_preview(raw,filename,company,origin=None,document_date=None,_resume_token=None):
     if company not in e.COMPANIES:raise ValueError('Выберите компанию')
     origin=e.normalize_city(origin) if origin else None
     if origin and origin not in city_names():raise ValueError('Выберите город из списка')
@@ -301,7 +314,7 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
     except Exception as exc:raise ValueError('Не удалось прочитать документ: '+str(exc)[:500]) from exc
     if document_date:
         if date.fromisoformat(document_date)>tariff_today():raise ValueError('Дата тарифов ещё не наступила')
-    token=uuid.uuid4().hex;name=t.normalize_filename(filename)
+    token=_id(_resume_token) if _resume_token else uuid.uuid4().hex;name=t.normalize_filename(filename)
     pending=root()/'multi_pending';pending.mkdir(parents=True,exist_ok=True)
     with LOCK:
         for key in list(JOBS):
@@ -312,17 +325,20 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
             try:
                 if f.stem not in active and time.time()-f.stat().st_mtime>1800:f.unlink(missing_ok=True)
             except FileNotFoundError:pass
-        (pending/(token+Path(name).suffix.lower())).write_bytes(raw)
+        data_store.write_bytes(pending/(token+Path(name).suffix.lower()),raw)
         JOBS[token]={'token':token,'status':'parsing','company':company,'filename':name,'created_at':e._now(),
-                     'done':0,'total':0,'matched':0,'message':'Читаю документ…'}
+                     'done':0,'total':0,'matched':0,'message':'Читаю документ…','origin':origin,'document_date':document_date,'worker':_INSTANCE}
+        _save_job(token,True)
     def run():
         from . import scan_ocr
         def ocr_progress(info):
             with LOCK:JOBS[token].update(message=info['message'],ocr_page=info['done'],ocr_total=info['total'])
+            _save_job(token)
         progress_token=scan_ocr._PROGRESS.set(ocr_progress)
         try:
             def progress(done,total,matched):
                 with LOCK:JOBS[token].update(done=done,total=total,matched=matched)
+                _save_job(token)
             conflicts=[]
             parsed,errors=parse_routes(raw,name,company,origin,progress,conflicts)
             routes=[];dates=set();warnings=[]
@@ -359,7 +375,9 @@ def start_preview(raw,filename,company,origin=None,document_date=None):
                 skipped=len(errors),matched=len(routes),values_count=sum(len(r['values']) for r in routes),meta=metadata,message='Проверьте распознанные цены перед сохранением')
         except Exception as exc:
             with LOCK:JOBS[token].update(status='error',message=str(exc)[:1500])
-        finally:scan_ocr._PROGRESS.reset(progress_token)
+        finally:
+            scan_ocr._PROGRESS.reset(progress_token)
+            _save_job(token,True)
     threading.Thread(target=run,daemon=True).start()
     return status(token)
 
@@ -380,6 +398,11 @@ def start_many(files,company,origin=None,document_date=None):
 def status(token):
     with LOCK:
         result=JOBS.get(_id(token))
+        if not result and cloud_db.enabled():
+            result=e._read_json(root()/'library_jobs'/(token+'.json'),{})
+            if result and result.get('status')=='parsing' and result.get('worker')!=_INSTANCE:
+                result.update(status='interrupted',message='Сервер перезапущен. Можно повторить распознавание сохранённого файла.')
+            if result:JOBS[token]=result
         if not result:raise ValueError('Предпросмотр недоступен. Загрузите файл заново.')
         return json.loads(json.dumps(result))
 
@@ -387,6 +410,8 @@ def status(token):
 def commit(token,resolutions=None):
     ident=_id(token);path=root()/'multi_pending'/(ident+'.json')
     with e.STATE_LOCK:
+        prior=committed(ident)
+        if prior:return {'ok':True,'id':ident,**prior,'already_applied':True}
         data=e._read_json(path,{})
         if not data or e.age_seconds(data['meta']['created_at'])>1800:raise ValueError('Предпросмотр истёк. Загрузите файл заново.')
         conflicts=data.get('conflicts',[]);resolutions=resolutions or {}
@@ -396,31 +421,33 @@ def commit(token,resolutions=None):
             if isinstance(choice,bool) or not isinstance(choice,int) or not 0<=choice<len(conflict['options']):raise ValueError('Некорректный выбор цены')
             route=next(r for r in data['routes'] if (r['origin'],r['destination'])==(conflict['origin'],conflict['destination']))
             route['values'][conflict['profile_id']]=conflict['options'][choice]
-        meta=data['meta'];source=path.with_suffix(meta['extension']);raw=source.read_bytes()
+        meta=data['meta'];source=path.with_suffix(meta['extension']);raw=data_store.read_bytes(source)
         if hashlib.sha256(raw).hexdigest()!=meta['sha256']:raise ValueError('Файл изменился после проверки')
         target=root()/'files'/(ident+meta['extension']);target.parent.mkdir(exist_ok=True)
-        target.write_bytes(raw)
+        data_store.write_bytes(target,raw)
         from .document_imports import revision
         saved={**meta,'import_revision':revision()+1,'source_file':target.name,'uploaded_at':e._now(),'captured_at':e._now(),
                'source_type':'Файл пользователя','data_origin':'uploaded','online':False,'uploaded':True,
                'route_count':len(data['routes']),'values_count':sum(len(r['values']) for r in data['routes'])}
         from .document_imports import _check_values
         with db() as conn:
-            conn.execute('INSERT INTO files VALUES (?,?,?,1)',(ident,meta['company'],json.dumps(saved,ensure_ascii=False)))
+            conn.execute('INSERT INTO files(id,company,meta,active) VALUES (?,?,?,1)',(ident,meta['company'],json.dumps(saved,ensure_ascii=False)))
             for route in data['routes']:
                 _check_values(route['values']);o,d=route['origin'],route['destination']
                 if not e.is_supported_route(o,d):raise ValueError('Некорректный маршрут')
                 conn.execute('DELETE FROM excluded WHERE company=? AND origin=? AND destination=?',(meta['company'],o,d))
-                conn.execute('INSERT OR REPLACE INTO route_documents VALUES (?,?,?,?)',(meta['company'],o,d,ident))
+                conn.execute('INSERT INTO route_documents(company,origin,destination,file) VALUES (?,?,?,?) ON CONFLICT(company,origin,destination) DO UPDATE SET file=excluded.file',(meta['company'],o,d,ident))
                 for pid,value in route['values'].items():
-                    conn.execute('INSERT INTO prices VALUES (?,?,?,?,?)',(ident,o,d,pid,json.dumps({**route['meta'],**value},ensure_ascii=False)))
+                    conn.execute('INSERT INTO prices(file,origin,destination,profile,payload) VALUES (?,?,?,?,?)',(ident,o,d,pid,json.dumps({**route['meta'],**value},ensure_ascii=False)))
         from .manual_prices import clear_covered
         for route in data['routes']:clear_covered(meta['company'],route['origin'],route['destination'],route['values'])
-        path.unlink();source.unlink()
+        data_store.delete(path);data_store.delete(source)
         from .document_imports import bump_revision
         bump_revision()
         with LOCK:
-            if ident in JOBS:JOBS[ident]['status']='committed'
+            if ident in JOBS:
+                JOBS[ident]['status']='committed'
+                _save_job(ident,True)
         return {'ok':True,'id':ident,**saved}
 
 
@@ -491,3 +518,10 @@ def interval_template(company,origin=None):
         'Сохраните файл, загрузите его для выбранной компании и проверьте предпросмотр перед подтверждением.']:
         help.append([line])
     out=io.BytesIO();wb.save(out);return out.getvalue()
+
+
+def retry_preview(token):
+    job=status(token)
+    if job['status'] not in {'interrupted','error'}:return job
+    name=job['filename'];source=root()/'multi_pending'/(token+Path(name).suffix.lower())
+    return start_preview(data_store.read_bytes(source),name,job['company'],job.get('origin'),job.get('document_date'),_resume_token=token)
