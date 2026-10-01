@@ -995,6 +995,9 @@ def _dellin_api_live(appkey: str, origin: str, destination: str, weight: float, 
 
 def _collect_live_calculator(company: str, origin: str, destination: str, profile_id: str, timeout: float=50) -> tuple[dict[str,dict[str,Any]],dict[str,Any]]:
     """Get a fresh exact point from an official calculator/API without cache fallback."""
+    if company == "Байкал Сервис":
+        from .baikal import collect
+        return collect(origin, destination, [profile_id], timeout=timeout)
     from . import legacy_backend as lb
     p=PROFILE_BY_ID[profile_id]
     if p.get("is_minimum_profile"):
@@ -1060,30 +1063,7 @@ def _collect_live_calculator(company: str, origin: str, destination: str, profil
                 row={**calc,"status":"ok","source_type":calc.get("source_label") or "Официальный публичный калькулятор Возовоза","freshness":"live"}
             else:
                 row=_vozovoz_live_route_minimum(origin,destination)
-    elif company=="Байкал Сервис":
-        settings=lb.load_settings()
-        if settings.get("baikal_api_key") and settings.get("baikal_api_url"):
-            row=lb.calculate_baikal(origin,destination,w,v)
-            if str(row.get("freshness") or "").lower()!="live":
-                raise RuntimeError("Байкал Сервис API не вернул production LIVE-ответ")
-        elif not _browser_enabled():
-            row=_live_route_minimum(company,origin,destination)
-        else:
-            from .public_web import calculate_from_public_site
-            errors=[]
-            # Route-specific page first: it contains both the calculator and the
-            # correct origin/destination context. Then try the generic calculator.
-            live_urls=(_route_page_url(company,origin,destination),
-                       )
-            for live_url in live_urls:
-                calc=calculate_from_public_site(company,origin,destination,w,v,allow_visible_fallback=False,url_override=live_url,route_preselected=(live_url==live_urls[0]))
-                if calc.get("ok"):
-                    row={**calc,"status":"ok","source_type":calc.get("source_label") or "Официальный публичный калькулятор Байкал Сервис","freshness":"live"}
-                    break
-                errors.append(str(calc.get("message") or live_url))
-            if row is None:
-                row=_live_route_minimum(company,origin,destination)
-                row["message"] = str(row.get("message") or "") + " Точный публичный калькулятор не ответил: " + " | ".join(errors[-2:])
+
     else:
         raise RuntimeError("онлайн-калькулятор не настроен")
     if not row or row.get("status") not in {"ok","cached"} or not isinstance(row.get("price"),(int,float)):
@@ -1102,6 +1082,9 @@ def _collect_live_calculator(company: str, origin: str, destination: str, profil
 
 def _collect_calculator_grid(company, origin, destination):
     """Expand an exact calculator to all control weights, never a route 'from'."""
+    if company == "Байкал Сервис":
+        from .baikal import collect
+        return collect(origin, destination)
     from .network import connection_scope
     values={};errors=[];missing={};meta={}
     deadline=time.monotonic()+240
@@ -1371,6 +1354,10 @@ def collect_selected(companies:list[str], origin:str, destination:str, profile_i
                     from .proline import collect as proline_grid
                     vals,meta=proline_grid(origin,destination,profile_ids=[p['id'] for p in COMMON_PROFILES if not p.get('is_minimum_profile')])
                 else:vals,meta=online_tariffs.collect(c,origin,destination,profile_id)
+                return finish(c,vals,meta)
+            if c=='Байкал Сервис':
+                from .baikal import collect as collect_baikal
+                vals,meta=collect_baikal(origin,destination,should_stop=should_stop)
                 return finish(c,vals,meta)
             if c=='КИТ':
                 vals,meta=collect_kit(origin,destination)

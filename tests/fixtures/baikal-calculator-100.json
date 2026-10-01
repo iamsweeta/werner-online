@@ -1,0 +1,66 @@
+{
+  "id": "fixture-request",
+  "transport": {
+    "auto": {
+      "departure": {
+        "guid": "0c5b2444-70a0-4932-980c-b4dc0d3f02b5",
+        "title": "Москва",
+        "services": [
+          {
+            "id": 2,
+            "name": "Въезд на территорию в городе отправления",
+            "cost": 122,
+            "individual": 0,
+            "description": ""
+          }
+        ],
+        "total": 122
+      },
+      "destination": {
+        "guid": "c2deb16a-0330-4f05-821f-1d09c93331e6",
+        "title": "Санкт-Петербург",
+        "services": []
+      },
+      "cargo": {
+        "description": "Мест 1, вес 100 кг, объем 0.5 м³",
+        "oversized": 0,
+        "services": [
+          {
+            "id": 1,
+            "name": "Межтерминальная перевозка Москва - Санкт-Петербург",
+            "cost": 3029.26,
+            "individual": 0,
+            "description": "",
+            "fuelsurcharge": {
+              "value": 30,
+              "cost": 699.06
+            }
+          },
+          {
+            "id": 3237,
+            "name": "Услуга по информированию о статусе груза",
+            "cost": 15.25,
+            "individual": 0,
+            "description": ""
+          },
+          {
+            "id": 31,
+            "name": "Страховой сбор",
+            "cost": 108.7,
+            "individual": 0,
+            "description": ""
+          }
+        ],
+        "total": 3153.21
+      },
+      "transit": {
+        "int": 2,
+        "day24": "суток",
+        "day": "дня",
+        "date_from": "2026-09-30T00:00:00",
+        "date_to": "2026-10-02T00:00:00"
+      },
+      "total": 3275.21
+    }
+  }
+}

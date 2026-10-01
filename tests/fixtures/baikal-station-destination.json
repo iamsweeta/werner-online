@@ -1,0 +1,41 @@
+{
+  "city": {
+    "guid": "c2deb16a-0330-4f05-821f-1d09c93331e6",
+    "type": 3
+  },
+  "onRoute": 3,
+  "affiliate": {
+    "guid": "c2deb16a-0330-4f05-821f-1d09c93331e6",
+    "name": "Санкт-Петербург",
+    "terminals": [
+      {
+        "id": 546,
+        "name": "СПБ \"Бугры\"",
+        "start": 1,
+        "finish": 1,
+        "base": 1
+      },
+      {
+        "id": 548,
+        "name": "СПБ \"Киевская\"",
+        "start": 1,
+        "finish": 1,
+        "base": 0
+      },
+      {
+        "id": 549,
+        "name": "СПБ \"Минеральная\"",
+        "start": 1,
+        "finish": 1,
+        "base": 0
+      },
+      {
+        "id": 550,
+        "name": "СПБ \"Софийская\"",
+        "start": 1,
+        "finish": 1,
+        "base": 0
+      }
+    ]
+  }
+}

@@ -92,6 +92,29 @@ class CloudStorage(unittest.TestCase):
         self.assertTrue(again['already_applied']);self.assertEqual(len(lib.list_files()),1)
         self.assertEqual(self.e.quote('Werner',*self.route,'w100')['price'],1300)
 
+    def test_reuse_original_new_route_is_atomic_and_survives_cold_restart(self):
+        from app import document_imports as imp,route_import_jobs as jobs,price_library as lib
+        from tests.test_library_v53 import document
+        preview=imp.preview(document(),'two-routes.csv','Werner',*self.route)
+        saved=imp.commit(preview['token']);ident=saved['document_id']
+        job=jobs.start_saved(ident,*self.route[::-1]);end=time.monotonic()+20
+        while job['status'] in {'queued','parsing'} and time.monotonic()<end:
+            time.sleep(.05);job=jobs.status(job['job_id'])
+        self.assertEqual(job['status'],'ready',job);token=job['preview']['token']
+        # A failed final transaction cannot leave an applied route or receipt.
+        with patch('app.manual_prices.clear_covered',side_effect=RuntimeError('test interruption')):
+            with self.assertRaises(RuntimeError):imp.commit(token)
+        self.assertIsNone(self.e.quote('Werner',*self.route[::-1],'w100')['price'])
+        self.assertEqual(lib.list_files()[0]['route_count'],1)
+        result=imp.commit(token);self.assertTrue(result['reused_document'])
+        self.assertTrue(imp.commit(token)['already_applied'])
+        shutil.rmtree(self.e.RUNTIME_DIR);self.e.RUNTIME_DIR.mkdir()
+        self.assertEqual(lib.list_files()[0]['route_count'],2);self.assertEqual(len(lib.list_files()),1)
+        self.assertEqual(imp.source_file(saved['meta']['source_file']).read_bytes(),document())
+        code="from app import v42_engine as e;import json;print(json.dumps([e.quote('Werner','Казань','Уфа','w100')['price'],e.quote('Werner','Уфа','Казань','w100')['price']]))"
+        child=subprocess.run([sys.executable,'-c',code],env={**os.environ,'TARIFF_DATA_DIR':str(self.directory/'reused-cold')},capture_output=True,text=True,timeout=30)
+        self.assertEqual(child.returncode,0,child.stderr);self.assertEqual(json.loads(child.stdout),[1200,1300])
+
     def test_multi_preview_and_confirmation_survive_restart(self):
         from app import price_library as lib
         job=lib.start_preview(self.csv,'monthly.csv','Werner','Казань')

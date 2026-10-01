@@ -28,7 +28,7 @@ class V42Tests(unittest.TestCase):
 
     def test_health_and_two_routes(self):
         d=self.client.get('/health').json()
-        self.assertEqual(d['version'],'63.2')
+        self.assertEqual(d['version'],main.VERSION)
         self.assertEqual(d['engine'],'v51_verified_sources')
         self.assertEqual(d['port_hint'],8423)
         self.assertGreater(d['cities_count'],200)
@@ -96,6 +96,7 @@ class V42Tests(unittest.TestCase):
         meta={'source_type':'fresh official','source_url':'https://example.test','captured_at':e._now()}
         from app import online_tariffs
         with patch.object(online_tariffs,'collect',return_value=(doc_vals,meta)), \
+             patch('app.baikal.collect',return_value=(doc_vals,meta)), \
              patch.object(online_tariffs,'fetch',return_value=('<html>Запросить стоимость</html>'.encode(),meta)), \
              patch.object(col,'_collect_document_batch',return_value={}), \
              patch.object(col,'_profile_values_from_fresh_documents',return_value=(doc_vals,meta)), \
@@ -167,7 +168,7 @@ class V42Tests(unittest.TestCase):
             self.assertEqual(r.status_code,200)
             wb=load_workbook(BytesIO(r.content),data_only=True); ws=wb.active
             self.assertEqual(ws['B1'].value,f'{o} → {d}')
-            self.assertEqual(ws['B2'].value,'63.2')
+        self.assertEqual(ws['B2'].value,main.VERSION)
 
     def test_specialized_collectors_are_direction_specific(self):
         rates=(600.0,[(250.0,12.0),(750.0,11.0),(1250.0,10.0),(2500.0,9.0),(5000.0,8.0)],'Москва-Юг')
@@ -278,14 +279,13 @@ class V42Tests(unittest.TestCase):
         self.assertEqual(vals['w100']['price'],720.0)
         self.assertIn('маршрутная',meta['source_type'])
 
-    def test_baikal_tries_main_public_calculator_before_iframe(self):
-        from app import public_web, legacy_backend as lb
-        live={'ok':True,'price':3275.0,'price_is_minimum':False,'source_url':'https://www.baikalsr.ru/services/types/avtomobilnye-perevozki-gruzov/','source_label':'Официальный публичный калькулятор Байкал Сервис','browser':'edge'}
-        with patch.object(col,'_browser_enabled',return_value=True), patch.object(lb,'load_settings',return_value={}), patch.object(public_web,'calculate_from_public_site',return_value=live) as fn:
-            vals,meta=col._collect_live_calculator('Байкал Сервис','Санкт-Петербург','Москва','w100')
-        self.assertEqual(vals['w100']['price'],3275.0)
-        self.assertIn('/city/spb__moscow/',fn.call_args.kwargs['url_override'])
-        self.assertIn('baikalsr.ru',meta['source_url'])
+    def test_baikal_uses_dedicated_http_adapter_without_browser(self):
+        from app import baikal, public_web
+        expected=({'w100':{'kind':'exact','price':3029.26}},{'source_url':baikal.PAGE})
+        with patch.object(baikal,'collect',return_value=expected) as fn, patch.object(public_web,'calculate_from_public_site') as browser:
+            actual=col._collect_live_calculator('Байкал Сервис','Москва','Санкт-Петербург','w100')
+        self.assertEqual(actual,expected);browser.assert_not_called()
+        self.assertEqual(fn.call_args.args,('Москва','Санкт-Петербург',['w100']))
 
 
     def test_compare_counts_live_lower_bound_as_online(self):
@@ -298,14 +298,13 @@ class V42Tests(unittest.TestCase):
         self.assertEqual(d['online_exact_count'],0)
         self.assertEqual(d['online_lower_bound_count'],1)
 
-    def test_baikal_falls_back_to_fresh_route_minimum(self):
-        from app import public_web, legacy_backend as lb
-        fail={'ok':False,'message':'widget blocked'}
-        minimum={'status':'ok','price':588.0,'price_is_minimum':True,'source_type':'Официальная маршрутная страница Байкал Сервис — LIVE','source_url':'https://www.baikalsr.ru/city/spb__moscow/','freshness':'live','browser':'requests'}
-        with patch.object(lb,'load_settings',return_value={}), patch.object(public_web,'calculate_from_public_site',return_value=fail), patch.object(col,'_live_route_minimum',return_value=minimum):
-            vals,meta=col._collect_live_calculator('Байкал Сервис','Санкт-Петербург','Москва','w100')
-        self.assertEqual(vals['w100']['kind'],'lower_bound')
-        self.assertEqual(vals['w100']['price'],588.0)
+    def test_baikal_failure_does_not_replace_exact_weights_with_route_advertisement(self):
+        from app import baikal
+        with patch.object(baikal,'collect',side_effect=RuntimeError('source unavailable')), patch.object(col,'_live_route_minimum') as minimum:
+            with self.assertRaisesRegex(RuntimeError,'source unavailable'):
+                col._collect_live_calculator('Байкал Сервис','Москва','Санкт-Петербург','w100')
+        minimum.assert_not_called()
+
 
     def test_dellin_falls_back_to_fresh_route_minimum(self):
         from app import public_web

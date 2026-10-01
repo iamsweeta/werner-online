@@ -90,10 +90,18 @@ def cleanup_pending():
         except OSError:pass
 
 
-def preview(raw, filename, company, origin, destination):
+def preview(raw, filename, company, origin, destination,document_id=None):
     origin,destination=_validate(company,origin,destination)
     if len(raw)>MAX_BYTES:raise ValueError('Максимальный размер документа — 20 МБ')
+    if document_id:
+        from .price_library import original
+        saved,_=original(document_id)
+        if saved['company']!=company or (saved.get('sha256') and saved['sha256']!=hashlib.sha256(raw).hexdigest()):
+            raise ValueError('Выбранный документ не соответствует компании или оригиналу')
+        filename=saved['original_filename']
     values,parsed=parse_document(raw,filename,company,origin,destination)
+    if document_id and not parsed.get('document_date'):
+        parsed['document_date']=saved.get('document_date')
     _check_values(values)
     warnings=['Это документ пользователя. Его загрузка не подтверждает, что перевозчик применяет эти цены сейчас.']
     if parsed.get('ocr'):
@@ -114,10 +122,11 @@ def preview(raw, filename, company, origin, destination):
           'company':company,'origin':origin,'destination':destination,'created_at':e._now(),
           'source_type':'Файл пользователя · '+str(parsed.get('parser') or ext.upper()),
           'data_origin':'uploaded','source_url':None,'warnings':warnings,'token':token,'extension':ext}
+    if document_id:meta['document_id']=document_id
     with e.STATE_LOCK:
         cleanup_pending()
         pending=_token_path(token);pending.parent.mkdir(parents=True,exist_ok=True)
-        data_store.write_bytes(pending.with_suffix(ext),raw)
+        if not document_id:data_store.write_bytes(pending.with_suffix(ext),raw)
         e._robust_json_write(pending,{'meta':meta,'values':values})
     return {'token':token,'company':company,'origin':origin,'destination':destination,'meta':meta,
             'warnings':warnings,'rows':[{'profile':p,**values[p['id']]} for p in e.COMMON_PROFILES if p['id'] in values],
@@ -126,6 +135,9 @@ def preview(raw, filename, company, origin, destination):
 
 def commit(token):
     with e.STATE_LOCK:
+        receipt_path=root()/'applied'/(_token_path(token).name)
+        receipt=e._read_json(receipt_path,{})
+        if receipt:return {**receipt,'already_applied':True}
         from .price_library import committed
         prior=committed(token)
         if prior:return {'ok':True,'company':prior['company'],'origin':prior['origin'],'destination':prior['destination'],
@@ -135,19 +147,32 @@ def commit(token):
             raise ValueError('Предпросмотр истёк. Загрузите файл заново и проверьте цены')
         meta=data['meta'];values=data['values'];_check_values(values)
         company=meta['company'];o,d=_validate(company,meta['origin'],meta['destination'])
-        source=pending.with_suffix(meta['extension']);raw=data_store.read_bytes(source)
+        document_id=meta.get('document_id')
+        if document_id:
+            from .price_library import original
+            _,source=original(document_id)
+        else:source=pending.with_suffix(meta['extension'])
+        raw=data_store.read_bytes(source)
         if hashlib.sha256(raw).hexdigest()!=meta['sha256']:
             raise ValueError('Файл изменился после предпросмотра; сохранение отменено')
-        filename=token+meta['extension'];target=root()/'files'/filename
-        target.parent.mkdir(parents=True,exist_ok=True);data_store.write_bytes(target,raw)
-        saved={**meta,'import_revision':revision()+1,'source_file':filename,'uploaded_at':e._now(),'captured_at':e._now(),'online':False}
-        from .price_library import register_single
-        saved=register_single(token,saved,values,o,d)
+        if document_id:
+            from .price_library import extend_route
+            saved=extend_route(document_id,meta,values,o,d)
+        else:
+            filename=token+meta['extension'];target=root()/'files'/filename
+            target.parent.mkdir(parents=True,exist_ok=True);data_store.write_bytes(target,raw)
+            saved={**meta,'import_revision':revision()+1,'source_file':filename,'uploaded_at':e._now(),'captured_at':e._now(),'online':False}
+            from .price_library import register_single
+            saved=register_single(token,saved,values,o,d)
         from .manual_prices import clear_covered
         clear_covered(company,o,d,values)
         bump_revision()
-        data_store.delete(pending);data_store.delete(source)
-        return {'ok':True,'company':company,'origin':o,'destination':d,'rows':len(values),'meta':saved}
+        receipt={'ok':True,'company':company,'origin':o,'destination':d,'rows':len(values),'meta':saved,
+                 'reused_document':bool(document_id),'document_id':document_id or token}
+        e._robust_json_write(receipt_path,receipt)
+        data_store.delete(pending)
+        if not document_id:data_store.delete(source)
+        return receipt
 
 
 def remove(company, origin, destination):

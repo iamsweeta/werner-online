@@ -186,7 +186,7 @@ document.querySelectorAll('[data-workspace]').forEach(btn=>{
     const next=tabs[(tabs.indexOf(btn)+(['ArrowLeft','ArrowUp'].includes(event.key)?-1:1)+tabs.length)%tabs.length];next.click();next.focus();
   });
 });
-document.querySelector('[data-open-workspace]').addEventListener('click',e=>{e.preventDefault();setWorkspace('bulk');});
+document.querySelector('[data-open-workspace]').addEventListener('click',e=>{e.preventDefault();setWorkspace('route');});
 wsEl('bulkDocumentsButton').addEventListener('click',()=>setWorkspace('documents',{focus:true}));
 wsEl('documentsExportButton').addEventListener('click',()=>setWorkspace('bulk',{focus:true}));
 wsEl('documentFile').addEventListener('change',()=>selectDocuments(wsEl('documentFile').files));
@@ -221,7 +221,7 @@ async function refreshRouteDocuments(origin,destination){
     if(seq!==routeDocumentsState.seq||wsEl('originSelect').value!==origin||wsEl('destinationSelect').value!==destination)return;
     const companies=(state.options?.companies||[]).filter(c=>state.calculationCompanies.has(c.id));
     const matched=(data.files||[]).filter(f=>state.calculationCompanies.has(f.company));
-    wsEl('routeDocumentStatus').textContent=matched.length?`${origin} → ${destination}: ${matched.length} подходящих документов. Выбор сохраняется для обеих таблиц.`:data.total_files?'Для выбранных компаний и направления подходящих документов нет. Проверьте направление в библиотеке или загрузите нужный прайс.':'Библиотека пуста. Загрузите и подтвердите прайс в разделе «Прайс-листы» или кнопкой «Загрузить прайс для маршрута».';
+    wsEl('routeDocumentStatus').textContent=matched.length?`${origin} → ${destination}: ${matched.length} подходящих документов. Выбор сохраняется для обеих таблиц.`:data.total_files?'Для этого направления цены ещё не извлекались. Нажмите «Цены из файла» и выберите сохранённый прайс компании.':'Библиотека пуста. Загрузите и подтвердите прайс в разделе «Прайс-листы» или кнопкой «Цены из файла».';
     host.innerHTML=companies.map(company=>{
       const files=matched.filter(f=>f.company===company.id);if(!files.length)return '';
       const chosen=files.find(f=>f.selected);

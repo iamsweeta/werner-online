@@ -29,6 +29,39 @@ def committed(ident):
     return json.loads(row['meta']) if row else None
 
 
+def original(ident):
+    """Resolve a saved original, not a client-supplied path or filename."""
+    meta=committed(ident)
+    if not meta:raise ValueError('Прайс не найден или отключён. Выберите другой файл из библиотеки.')
+    filename=str(meta.get('source_file',''))
+    if not re.fullmatch(r'[a-f0-9]{32}\.(pdf|xlsx|xls|csv|zip)',filename):
+        raise ValueError('Оригинал этого прайса недоступен')
+    return meta,root()/'files'/filename
+
+
+def extend_route(ident,meta,values,origin,destination):
+    """Add a confirmed route to the same original, keeping other routes intact."""
+    from .document_imports import _check_values
+    _check_values(values)
+    saved,_=original(ident)
+    if saved['company']!=meta['company'] or (saved.get('sha256') and saved['sha256']!=meta['sha256']):
+        raise ValueError('Документ изменился после предпросмотра. Повторите распознавание.')
+    with db() as conn:
+        for pid,value in values.items():
+            payload={**meta,**value,'origin':origin,'destination':destination,'document_id':ident,
+                     'source_file':saved['source_file'],'captured_at':e._now()}
+            conn.execute('''INSERT INTO prices(file,origin,destination,profile,payload) VALUES (?,?,?,?,?)
+                ON CONFLICT(file,origin,destination,profile) DO UPDATE SET payload=excluded.payload''',
+                (ident,origin,destination,pid,json.dumps(payload,ensure_ascii=False)))
+        routes=conn.execute('SELECT origin,destination,COUNT(*) AS n FROM prices WHERE file=? GROUP BY origin,destination',(ident,)).fetchall()
+        saved.update(route_count=len(routes),values_count=sum(r['n'] for r in routes),updated_at=e._now())
+        conn.execute('UPDATE files SET meta=? WHERE id=?',(json.dumps(saved,ensure_ascii=False),ident))
+        conn.execute('DELETE FROM excluded WHERE company=? AND origin=? AND destination=?',(meta['company'],origin,destination))
+        conn.execute('''INSERT INTO route_documents(company,origin,destination,file) VALUES (?,?,?,?)
+            ON CONFLICT(company,origin,destination) DO UPDATE SET file=excluded.file''',(meta['company'],origin,destination,ident))
+    return {**saved,'document_id':ident,'origin':origin,'destination':destination}
+
+
 
 def root():return e.RUNTIME_DIR/'imports'
 

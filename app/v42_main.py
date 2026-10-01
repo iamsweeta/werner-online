@@ -21,7 +21,7 @@ from .v42_collectors import collect_selected, LOG_PATH
 from .cities import city_names, main_cities, MAIN_ORIGINS
 from .tariff_model import tariff_value, tariff_unit, is_rate_profile
 
-VERSION="63.2"
+VERSION="63.3"
 PORT=8423
 STATIC_DIR=BASE_DIR/"static"
 SETTINGS_PATH=RUNTIME_DIR/"settings.json"
@@ -463,6 +463,19 @@ def document_choice(body:RouteDocumentChoice):
 def routes_in_document(document_id:str):
     from .price_library import document_routes
     return _bulk_call(document_routes,document_id)
+
+
+class ExtractDocumentRoute(BaseModel):
+    origin:str
+    destination:str
+    job_id:str|None=None
+
+
+@app.post('/api/price-documents/{document_id}/extract',status_code=202)
+def extract_document_route(document_id:str,body:ExtractDocumentRoute):
+    from .route_import_jobs import start_saved
+    origin,destination=_validate_route(body.origin,body.destination)
+    return _bulk_call(start_saved,document_id,origin,destination,body.job_id)
 
 
 @app.get('/api/storage/backup')

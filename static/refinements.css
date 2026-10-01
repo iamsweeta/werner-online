@@ -1,0 +1,182 @@
+/* Route-first workspace. Theme tokens keep the white canvas and dark surfaces. */
+:root { --border:#e1e5ec; --surface2:#f5f7fa; --muted:#596476; --primary:#2559dc; --primarySoft:#edf2ff; --shadow:0 3px 18px #14234005; }
+html[data-theme=dark] { --bg:#0b0e14; --surface:#141922; --surface2:#1b2330; --border:#303c4e; --text:#f0f4fc; --muted:#a9b7cb; --primary:#a6c0ff; --primarySoft:#223450; --shadow:none; }
+html { scroll-padding-top:24px; }
+.skip-link { position:fixed; top:-100px; left:16px; z-index:100; background:var(--surface); padding:12px 18px; border:2px solid var(--primary); border-radius:8px; }
+.skip-link:focus { top:12px; }
+.sidebar { padding-top:28px; }
+.brand-mark { width:38px; height:38px; border-radius:11px; }
+.workspace-nav { gap:8px; }
+.nav-item { min-height:52px; border-radius:11px; }
+.nav-number { font-variant-numeric:tabular-nums; opacity:.65; }
+.topbar { padding-top:27px; padding-bottom:24px; }
+.topbar .eyebrow { display:none; }
+.workspace-heading h1 { font-size:27px; letter-spacing:-.035em; }
+.card { border-radius:18px; padding:24px; }
+.controls-card h2 { font-size:20px; }
+.controls-card>.section-head { align-items:center; }
+.timestamp { font-size:11px; text-align:right; font-variant-numeric:tabular-nums; }
+.controls-card>.filters { grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr) minmax(165px,.85fr); gap:12px; }
+.controls-card .route-swap-button { width:44px; padding:0; font-size:24px; height:46px; }
+.controls-card>.filters>.unit-mode-note { grid-row:auto; margin:0; font-size:11px; }
+.field>span { font-size:12px; font-weight:600; }
+.field select,.field input:not([type=checkbox]),.graph-controls select { min-height:46px; border-radius:10px; background-color:var(--surface); }
+.field select { text-overflow:ellipsis; }
+.route-actions { gap:10px; margin-top:18px; }
+.route-actions #exportButton { min-width:158px; }
+.button { min-height:46px; border-radius:10px; }
+.company-panel { margin-top:10px; padding-top:12px; }
+.company-panel summary,.help-details summary,.manager-details>summary { min-height:36px; align-content:center; }
+.controls-card .help-details { margin-top:10px; }
+.chart-card h2,.matrix-card h2 { font-size:21px; }
+.graph-head .section-head p,.graph-head p { margin-top:4px; }
+.graph-controls { gap:10px; }
+.graph-controls label { font-size:12px; font-weight:600; }
+.graph-companies { margin-top:14px; }
+.graph-companies summary { font-size:13px; cursor:pointer; min-height:40px; align-content:center; }
+#graphCompaniesCount { color:var(--muted); margin-left:8px; font-size:12px; font-weight:400; }
+.graph-legend { margin-top:10px; }
+.weight-window { border:0; padding:14px 16px; margin-top:18px; }
+.weight-window .section-head { display:flex; align-items:center; }
+.weight-window strong,.weight-window output { font-size:12px; }
+.range-inputs { gap:22px; }
+.range-inputs label { font-size:12px; }
+.range-inputs input { cursor:ew-resize; }
+.rate-chart { border-radius:12px; }
+.matrix-description { display:none; }
+.matrix-card .section-head p { margin-top:5px; font-size:12px; }
+.matrix-table { min-width:100%; }
+.matrix-table td,.matrix-table th { padding:10px 12px; }
+.matrix-table td:first-child,.matrix-table th:first-child { min-width:116px; }
+.cell-price { min-height:44px; padding:8px 6px; border-radius:6px; }
+.cell-price:focus-visible { outline:2px solid var(--primary); outline-offset:1px; }
+.mobile-matrix-panel { display:none; }
+.manager-details:not([open]) { padding:12px 20px; }
+.manager-details summary,.sources-summary { font-size:13px; }
+.settings-dialog { max-height:94dvh; }
+.settings-card { padding:26px; scrollbar-gutter:stable; overscroll-behavior:contain; }
+.import-dialog { width:min(820px,calc(100% - 32px)); }
+#importDialog .settings-grid { grid-template-columns:1fr; margin-top:18px; }
+.import-mode { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); margin:18px 0; }
+.import-mode button { min-height:44px; border:0; border-radius:8px; background:transparent; color:var(--muted); font-size:14px; font-weight:650; }
+.import-mode button[aria-pressed=true] { color:var(--primary); background:var(--surface); box-shadow:0 1px 4px #12233a12; }
+.input-hint { font-size:12px; color:var(--muted); line-height:1.6; margin-top:8px; }
+#importDialog .company-actions { justify-content:space-between; align-items:center; }
+#importCurrent { font-size:12px; color:var(--muted); }
+.import-help { padding:10px 0; border-top:1px solid var(--border); }
+.import-help summary { cursor:pointer; min-height:34px; align-content:center; }
+.import-help p { margin:10px 0; }
+.import-apply-actions { padding-bottom:8px; box-shadow:0 -8px 18px var(--surface); }
+.settings-card .confirmation,.settings-card .auto-refresh-option { line-height:1.6; }
+.applied-feedback { line-height:1.6; font-size:13px; }
+.document-item { border-radius:12px; }
+.document-item h3 { overflow-wrap:anywhere; font-size:14px; }
+.document-item p,.document-item small { line-height:1.6; }
+.document-item .file-actions { gap:8px; }
+.file-actions a { min-height:44px; display:inline-flex; align-items:center; }
+.toast { box-shadow:0 6px 24px #0002; }
+
+@media (max-width:1100px) and (min-width:641px) {
+  .controls-card>.filters { grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr); }
+  .controls-card .unit-mode-field { grid-column:1/-1; }
+  .route-actions #exportButton { margin-left:0; }
+}
+@media (max-width:800px) {
+  .sidebar { position:fixed; inset:auto 0 0; height:auto; padding:8px 12px calc(8px + env(safe-area-inset-bottom)); border-top:1px solid var(--border); border-bottom:0; box-shadow:0 -6px 24px #12223808; z-index:35; }
+  .sidebar .brand { display:none; }
+  .workspace-nav { margin:0; gap:5px; }
+  .nav-item { min-height:50px; font-size:12px; padding:9px 5px; }
+  .page { padding:0 18px calc(94px + env(safe-area-inset-bottom)); }
+  .topbar { padding:22px 20px; align-items:center; }
+  .workspace-heading h1 { font-size:25px; }
+  .card { padding:20px; }
+  .route-workspace,#documentsPanel { gap:16px; }
+  .toast { bottom:calc(84px + env(safe-area-inset-bottom)); left:16px; right:16px; width:max-content; max-width:calc(100% - 32px); margin:auto; }
+  .settings-dialog { margin:auto; }
+}
+@media (max-width:640px) {
+  body { font-size:14px; }
+  .topbar { flex-wrap:nowrap; gap:8px; padding:20px 16px 18px; }
+  .workspace-heading { min-width:0; }
+  .workspace-heading h1 { font-size:22px; line-height:1.25; }
+  #workspaceSubtitle { display:none; }
+  .top-actions { gap:6px; }
+  .top-actions #settingsButton { width:42px; height:44px; min-height:44px; padding:0; font-size:0; }
+  #settingsButton::before { content:'⚙'; font-size:21px; line-height:1; }
+  .theme-selector { gap:0; padding:2px; border-radius:10px; }
+  .theme-choice { width:38px; min-height:38px; font-size:0; padding:4px; }
+  #lightThemeButton::before { content:'☀'; font-size:19px; }
+  #darkThemeButton::before { content:'☾'; font-size:21px; }
+  .page { padding-left:10px; padding-right:10px; }
+  .card { padding:18px 15px; border-radius:15px; }
+  .controls-card>.section-head { display:block; }
+  .controls-card h2 { font-size:17px; }
+  .timestamp { margin-top:6px; font-size:10px; text-align:left; }
+  .controls-card>.filters { grid-template-columns:minmax(0,1fr) 40px minmax(0,1fr); gap:12px 6px; margin-top:18px; }
+  .controls-card .route-swap-button { width:40px; min-height:46px; border-color:transparent; background:var(--surface2); }
+  .controls-card .unit-mode-field { grid-column:1/-1; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:14px; }
+  .controls-card>.filters>.unit-mode-note { font-size:10px; line-height:1.5; }
+  input,select,.field select,.field input,.graph-controls select { font-size:16px; }
+  .field select { padding-left:10px; padding-right:22px; min-width:0; }
+  .route-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding-top:14px; margin-top:12px; }
+  .route-actions .button { width:100%; font-size:13px; min-width:0; }
+  .route-actions #exportButton { grid-column:1/-1; margin:0; min-width:0; }
+  .route-actions #routeStopButton { grid-column:1/-1; grid-row:2; }
+  .controls-card .help-details,.company-panel { margin-top:8px; }
+  .company-panel summary { flex-wrap:wrap; gap:4px 8px; }
+  .company-selector { gap:7px; }
+  .company-option { min-height:44px; font-size:12px; }
+  .graph-controls { display:grid; grid-template-columns:1fr 1fr; margin-top:16px; gap:8px; }
+  .graph-controls label { margin-top:0; font-size:11px; }
+  .graph-controls select { min-height:44px; padding:8px 6px; }
+  .chart-card h2,.matrix-card h2 { font-size:18px; }
+  .graph-head p { font-size:12px; margin-top:4px; }
+  .range-inputs { grid-template-columns:1fr 1fr; gap:16px; }
+  .range-inputs label { gap:4px; }
+  .weight-window .section-head { display:flex; gap:8px; }
+  .weight-window strong,.weight-window output { font-size:11px; }
+  .graph-legend { display:grid; grid-template-columns:1fr 1fr; }
+  .graph-legend-item { min-height:44px; padding:8px; }
+  .graph-legend-item span { font-size:11px; }
+  .mobile-matrix-panel { display:block; margin-top:16px; }
+  .mobile-matrix-tools { display:flex; gap:10px; align-items:end; }
+  .mobile-matrix-tools .field { flex:1; min-width:0; }
+  .mobile-matrix-tools .text-button { font-size:12px; flex-shrink:0; }
+  .mobile-matrix-note { font-size:11px; line-height:1.55; margin-top:10px; color:var(--muted); }
+  .mobile-matrix-table { margin-top:12px; max-height:60dvh; }
+  .mobile-matrix-table th { font-size:12px; }
+  .mobile-matrix-table th[scope=row] { position:static; font-weight:500; color:var(--text); background:var(--surface); vertical-align:middle; }
+  .mobile-matrix-table th:last-child,.mobile-matrix-table td { text-align:right; }
+  .mobile-matrix-table td { padding:5px 10px; vertical-align:middle; }
+  .mobile-matrix-table .cell-price { font-size:14px; }
+  .matrix-wrap { display:none; }
+  .mobile-show-all .matrix-wrap { display:block; }
+  .mobile-show-all .mobile-matrix-table,.mobile-show-all .mobile-matrix-tools .field { display:none; }
+  .mobile-show-all .mobile-matrix-tools { justify-content:flex-end; }
+  .sources-summary,.manager-details>summary { font-size:13px; }
+  .sources-summary .eyebrow { display:none; }
+  .settings-dialog,.import-dialog { width:calc(100% - 16px); max-height:calc(100dvh - 16px); }
+  .settings-card { padding:18px 14px; max-height:calc(100dvh - 16px); border-radius:14px; scrollbar-gutter:auto; }
+  .dialog-head h2 { font-size:20px; }
+  .dialog-head { gap:8px; }
+  .dialog-head .icon-button { width:40px; min-height:40px; }
+  #importDialog .company-actions { display:grid; grid-template-columns:1fr; gap:4px; }
+  #importPreviewButton { grid-row:1; }
+  #importTemplateButton { justify-self:center; }
+  .import-apply-actions .button { min-width:100%; }
+  .import-preview-table .comparison-table { min-width:620px; }
+  .document-item { grid-template-columns:32px minmax(0,1fr); }
+  .document-icon { width:32px; font-size:10px; }
+  .document-item .file-actions { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:6px 12px; }
+  .document-item .file-actions .text-button { text-align:left; justify-content:flex-start; font-size:12px; }
+  .document-fields { grid-template-columns:1fr; }
+  .workflow-steps { margin:18px 0; }
+  .workflow-steps p { display:none; }
+  .workflow-steps>div { min-height:28px; align-content:center; }
+  .bulk-card .bulk-hero h2 { font-size:21px; }
+}
+@media (prefers-reduced-motion:no-preference) {
+  .button,.nav-item,.theme-choice { transition:background-color .15s,border-color .15s; }
+}
+.section-head>div { min-width:0; }
+#documentPreviewTitle,.form-message,.input-hint { overflow-wrap:anywhere; }

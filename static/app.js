@@ -49,7 +49,7 @@ function setRefreshRouteLock(locked, origin='', destination=''){
   const ids=['destinationSelect','originSelect','profileSelect','swapRouteButton','selectAllCompaniesButton','clearCompaniesButton'];
   ids.forEach(id=>{const el=$(id); if(el) el.disabled=!!locked;});
   const btn=$('collectButton');
-  if(btn){ btn.disabled=!!locked||state.bulkActive; btn.textContent=state.bulkActive?'Идёт общий сбор':locked?`Обновляется ${origin} → ${destination}…`:'Обновить маршрут'; }
+  if(btn){ btn.disabled=!!locked||state.bulkActive; btn.textContent=state.bulkActive?'Идёт общий сбор':locked?'Обновляю…':'Обновить онлайн';btn.title=locked?`Обновляется ${origin} → ${destination}`:'Получить новые цены с сайтов компаний'; }
 }
 function rateProfile(profile){return !profile?.is_minimum_profile && Number(profile?.weight_kg)>=100;}
 function activeUnit(profile){ return state.unitMode==='per_kg' && !profile?.is_minimum_profile ? '₽/кг' : '₽'; }
@@ -193,6 +193,7 @@ function renderTariffGraph(data){
   legend.querySelectorAll('button:not([disabled])').forEach(btn=>btn.addEventListener('click',()=>{ const id=btn.dataset.company; if(state.hiddenGraphCompanies.has(id)) state.hiddenGraphCompanies.delete(id); else state.hiddenGraphCompanies.add(id); renderTariffGraph(data); }));
 
   const visible=series.filter(s=>s.count && !state.hiddenGraphCompanies.has(s.id));
+  if($('graphCompaniesCount'))$('graphCompaniesCount').textContent=`${visible.length} из ${series.length}`;
   const allValues=visible.flatMap(s=>s.values.filter(numeric));
   if(!allValues.length){ host.innerHTML=`<div class="empty">${series.some(s=>s.count)?'Все линии скрыты. Нажмите на компанию в легенде, чтобы вернуть её на график.':'Нет подтверждённых точек для выбранного масштаба и фильтра свежести.'}</div>`; return; }
   const {width,height,compact}=graphDimensions(host);
@@ -226,7 +227,8 @@ function renderTariffGraph(data){
 function renderComparison(data){
   state.comparison=data;
   const savedTimes=(data.items||[]).map(i=>i.captured_at).filter(t=>t&&Number.isFinite(Date.parse(t))).sort((a,b)=>Date.parse(b)-Date.parse(a));
-  $('updatedAt').textContent=savedTimes.length?'Последние данные: '+new Date(savedTimes[0]).toLocaleString('ru-RU')+' · сохранены без срока удаления':'Сохранённых цен пока нет';
+  $('updatedAt').textContent=savedTimes.length?'Сохранено · '+new Date(savedTimes[0]).toLocaleString('ru-RU'):'Цены ещё не загружены';
+  $('updatedAt').title='Последние успешные данные сохраняются без срока удаления. Нажмите «Обновить онлайн», когда нужны новые цены.';
   const selectedProfile=(state.options?.profiles||[]).find(p=>p.id===data.profile_id)||{}; const unit=activeUnit(selectedProfile); $('summaryTitle').textContent=`${data.range_weight} · ${selectedProfile.tariff_type||'Тариф'} · ${unit}`;
   $('summaryRoute').textContent=`${data.origin} → ${data.destination}`;
   const items=data.items||[];
@@ -272,7 +274,31 @@ function renderMatrix(data){
     const cells=companies.map(c=>{ const item=by[c.id]||{}; const hiddenByFreshness=!visiblePrice(item); let text=item.availability==='on_request'?'по запросу':hiddenByFreshness?(numeric(item.price)?'—':'нет данных'):(item.display_text||'нет данных'); let cls='empty-cell'; const v=hiddenByFreshness?null:exactViewValue(item,row.profile); if(numeric(v)){ text=fmt(v,rowUnit); cls='value-matrix'; } else if(!hiddenByFreshness&&item.price_is_minimum&&numeric(item.price)){ text=rowUnit==='₽/кг'?'— (от '+fmtMoney(item.price)+')':`от ${fmtMoney(item.price)}`; cls='lower-cell'; } if(!hiddenByFreshness&&!numeric(v)&&numeric(item.comparison_value)&&rowUnit==='₽/кг')text='нет ставки'; return `<td class="${cls} ${item.manual?'manual-cell':''}" title="${escapeHtml([statusLabel(item),item.captured_at?new Date(item.captured_at).toLocaleString('ru-RU'):'',cleanText(item.message||'')].filter(Boolean).join(' · '))}"><button type="button" class="cell-price" data-edit-price="${escapeHtml(c.id)}" data-price-profile="${escapeHtml(row.profile.id)}" aria-label="Изменить цену: ${escapeHtml(c.label)}, ${escapeHtml(row.profile.range_weight)}">${escapeHtml(text)}<span aria-hidden="true" class="edit-mark">✎</span></button>${item.manual?'<small class="manual-tag">вручную</small>':''}</td>`; }).join('');
     return `<tr class="shipment-row"><td class="range-cell"><strong>${escapeHtml(row.profile.range_weight)}</strong></td><td class="type-cell">${escapeHtml(row.profile.is_minimum_profile?'Минимум':state.unitMode==='per_kg'?'Расчётная стоимость':'Стоимость отправки')}</td><td class="unit-cell">${escapeHtml(rowUnit)}</td>${cells}</tr>`;
   }).join('');
+  renderMobileMatrix(companies);
 }
+
+function renderMobileMatrix(companies=(state.options?.companies||[]).filter(c=>state.calculationCompanies.has(c.id))){
+  const select=$('mobileCompanySelect');if(!select)return;
+  const previous=select.value;
+  select.innerHTML=companies.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join('');
+  const hasPrice=c=>(state.matrix?.profiles||[]).some(r=>(r.items||[]).some(x=>x.company===c.id&&visiblePrice(x)&&numeric(x.comparison_value)));
+  select.value=companies.some(c=>c.id===previous)?previous:(companies.find(hasPrice)||companies[0])?.id||'';
+  const index=companies.findIndex(c=>c.id===select.value);
+  // Reuse rendered cells so the mobile view has identical units, provenance and
+  // manual-edit actions to the full comparison table.
+  $('mobileMatrixBody').innerHTML=[...$('matrixBody').rows].map(row=>{
+    const cell=row.cells[index+3];if(!cell||index<0)return '';
+    return `<tr><th scope="row">${escapeHtml(row.cells[0].textContent)}</th>${cell.outerHTML}</tr>`;
+  }).join('');
+  $('mobileMatrixNote').textContent=companies.length?'Цены выбранной компании · нажмите на ячейку для редактирования.':'Выберите компании для сравнения.';
+}
+$('mobileCompanySelect')?.addEventListener('change',()=>renderMobileMatrix());
+$('mobileAllCompanies')?.addEventListener('click',()=>{
+  const button=$('mobileAllCompanies'),card=button.closest('.matrix-card');
+  const all=card.classList.toggle('mobile-show-all');button.setAttribute('aria-pressed',String(all));
+  button.textContent=all?'По одной компании':'Все компании';
+  $('mobileMatrixNote').textContent=all?'Прокрутите таблицу вправо, чтобы сравнить все компании.':'Цены выбранной компании · нажмите на ячейку для редактирования.';
+});
 
 function renderIntegrations(statuses){
   const items=(state.options?.integrations||[]).filter(x=>state.calculationCompanies.has(x.id));
@@ -422,7 +448,7 @@ function bulkControls(){
   $('bulkRetryButton').hidden=active||!(job.outcomes?.failed||job.outcomes?.partial);$('bulkRetryButton').disabled=exporting||bulkState.requesting;
   $('bulkExportButton').hidden=active||!job.job_id||(!job.export_outdated&&!['paused','error'].includes(job.status)&&job.export_status!=='error');$('bulkExportButton').disabled=exporting||bulkState.requesting;
   $('collectButton').disabled=active||state.refreshLocked;
-  if(active)$('collectButton').textContent='Идёт общий сбор';else if(!state.refreshLocked)$('collectButton').textContent='Обновить прайсы';
+  if(active)$('collectButton').textContent='Идёт общий сбор';else if(!state.refreshLocked)$('collectButton').textContent='Обновить онлайн';
 }
 async function updateBulkPlan(){
   const seq=++bulkState.planSeq;bulkState.planReady=false;
@@ -500,7 +526,7 @@ async function openSettings(){
   if(!dialog.open) dialog.showModal();
 }
 function closeSettings(){if($('settingsDialog').open)$('settingsDialog').close();}
-const importsState={seq:0,route:null,token:null,busy:false,companies:{},jobId:null};
+const importsState={seq:0,openSeq:0,route:null,token:null,busy:false,companies:{},jobId:null,files:[],routeFiles:[],mode:'library',applying:false};
 const IMPORT_JOB_KEY='tariff-route-import-jobs-v55';
 function importJobKey(route=importsState.route){return JSON.stringify([route?.origin,route?.destination]);}
 function savedImportJob(){
@@ -522,13 +548,14 @@ function forgetImportJob(jobId){
 }
 function importApplyNotice(message,error=false){const node=$('importApplyFeedback');node.hidden=!message;node.textContent=message;node.classList.toggle('error',error);}
 function resetImportPreview(){
+  $('importConfirmed').parentElement.hidden=false;
   importApplyNotice('');$('importDoneButton').hidden=true;$('importApplyButton').textContent='Применить цены из файла';
   importsState.seq++;importsState.token=null;importsState.jobId=null;$('importPreview').hidden=true;
   $('importConfirmed').checked=false;$('importApplyButton').disabled=true;$('importMessage').textContent='';
 }
 function importBusy(busy){
   importsState.busy=busy;
-  ['importCompany','importFile','importPreviewButton','importRemoveButton'].forEach(id=>$(id).disabled=busy);
+  ['importCompany','importFile','importPreviewButton','importRemoveButton','importSavedFile','importLibraryMode','importUploadMode'].forEach(id=>$(id).disabled=busy);
   $('importApplyButton').disabled=busy||!importsState.token||!$('importConfirmed').checked;
 }
 function showCurrentImport(){
@@ -538,31 +565,59 @@ function showCurrentImport(){
   $('importCurrent').textContent=saved?`Документ в библиотеке: ${saved.original_filename}. Импортирован: ${saved.uploaded_at}. Дата в документе: ${saved.document_date||'не распознана'}.`:'Для этой компании и направления пользовательский файл ещё не применён.';
   $('importRemoveButton').hidden=!saved;
 }
-async function openImport(){
+function setImportMode(mode){
+  importsState.mode=mode==='upload'?'upload':'library';
+  const library=importsState.mode==='library';
+  $('importSavedPanel').hidden=!library;$('importUploadPanel').hidden=library;
+  $('importLibraryMode').setAttribute('aria-pressed',String(library));
+  $('importUploadMode').setAttribute('aria-pressed',String(!library));
+  $('importPreviewButton').textContent=library?'Извлечь цены для маршрута':'Распознать и проверить';
+  if(library&&importsState.routeFiles.some(f=>f.id===$('importSavedFile').value))$('importPreviewButton').textContent='Применить сохранённые цены';
+}
+function renderSavedImportFiles(preferred=''){
+  const select=$('importSavedFile'),previous=preferred||select.value;
+  const files=importsState.files.filter(f=>f.company===$('importCompany').value);
+  select.innerHTML='<option value="">Выберите прайс-лист</option>'+files.map(f=>`<option value="${escapeHtml(f.id)}">${escapeHtml(f.original_filename)}${importsState.routeFiles.some(r=>r.id===f.id)?' · цены маршрута готовы':''}</option>`).join('');
+  select.value=files.some(f=>f.id===previous)?previous:files[0]?.id||'';
+  $('importSavedHint').textContent=files.length?'Оригинал уже на сервере. Извлечём только цены выбранного направления.':'У этой компании пока нет сохранённых файлов. Выберите «Новый файл».';
+  setImportMode(importsState.mode);
+}
+async function openImport(options={}){
+  const openSeq=++importsState.openSeq;
   resetImportPreview();importBusy(false);$('importFile').value='';
   importsState.route={origin:$('originSelect').value,destination:$('destinationSelect').value};
   $('importRoute').textContent=`${importsState.route.origin} → ${importsState.route.destination}`;
   $('importCompany').innerHTML=(state.options?.companies||[]).map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join('');
   if(state.calculationCompanies.size===1)$('importCompany').value=[...state.calculationCompanies][0];
-  importsState.companies={};showCurrentImport();$('importDialog').showModal();
+  if(options.company)$('importCompany').value=options.company;
+  importsState.companies={};importsState.files=[];importsState.routeFiles=[];
+  importsState.mode='library';renderSavedImportFiles();$('importSavedHint').textContent='Загружаю библиотеку…';
+  showCurrentImport();$('importDialog').showModal();
   const seq=importsState.seq;
   try{
-    const data=await getJSON('/api/imports?'+new URLSearchParams(importsState.route));
-    if(seq!==importsState.seq||!$('importDialog').open)return;
-    importsState.companies=data.companies||{};showCurrentImport();
-  }catch(e){if(seq===importsState.seq)$('importMessage').textContent=e.message;}
+    const [data,library,matched]=await Promise.all([
+      getJSON('/api/imports?'+new URLSearchParams(importsState.route)),
+      getJSON('/api/price-documents'),
+      getJSON('/api/route-documents?'+new URLSearchParams(importsState.route))]);
+    if(openSeq!==importsState.openSeq||!$('importDialog').open)return;
+    importsState.companies=data.companies||{};importsState.files=library.files||[];importsState.routeFiles=matched.files||[];
+    if(seq===importsState.seq&&!options.company&&state.calculationCompanies.size!==1&&importsState.files.length)$('importCompany').value=importsState.files[0].company;
+    renderSavedImportFiles(options.document_id);showCurrentImport();
+    if(!importsState.files.length&&seq===importsState.seq)setImportMode('upload');
+  }catch(e){if(openSeq===importsState.openSeq&&$('importDialog').open){$('importSavedHint').textContent='Библиотека временно недоступна: '+e.message;$('importMessage').textContent=e.message;}}
   if(seq===importsState.seq&&$('importDialog').open){
     const saved=savedImportJob();
     if(saved&&[...$('importCompany').options].some(o=>o.value===saved.company)){
-      $('importCompany').value=saved.company;showCurrentImport();importsState.jobId=saved.job_id;
+      $('importCompany').value=saved.company;showCurrentImport();renderSavedImportFiles(saved.document_id);importsState.jobId=saved.job_id;
       await monitorImportJob(saved.job_id,seq);
     }
   }
 }
-function closeImport(){resetImportPreview();$('importDialog').close();}
+function closeImport(){if(importsState.applying)return;resetImportPreview();$('importDialog').close();}
 function renderImportPreview(data){
   if(data.origin!==importsState.route.origin||data.destination!==importsState.route.destination||data.company!==$('importCompany').value)throw Error('Результат относится к другому маршруту или компании. Откройте нужное направление.');
   importsState.token=data.token;
+  $('importRows').closest('.table-wrap').hidden=false;
   $('importMessage').textContent=`Распознано ${data.rows.length} из ${state.options.profiles.length} строк. Цены ещё не применены.`;
   const m=data.meta;
   $('importEvidence').textContent=`${data.company} · ${data.origin} → ${data.destination}. ${m.parser}. Дата в документе: ${m.document_date||'не распознана'}. ${m.source_page?'Страница '+m.source_page+'. ':''}${m.source_row?'Строка '+m.source_row+'. ':''}${m.archive_member?'Файл в архиве: '+m.archive_member+'. ':''}${m.calculation_basis||''}`;
@@ -618,6 +673,7 @@ async function previewImport(){
   if(importsState.jobId&&!importsState.token){
     await monitorImportJob(importsState.jobId,++importsState.seq);return;
   }
+  if(importsState.mode==='library'){await previewSavedImport();return;}
   const file=$('importFile').files[0];resetImportPreview();
   if(!file){$('importMessage').textContent='Выберите документ на компьютере.';return;}
   if(file.size>20*1024*1024){$('importMessage').textContent='Файл превышает 20 МБ.';return;}
@@ -638,9 +694,48 @@ async function previewImport(){
   }
   finally{if(seq===importsState.seq)importBusy(false);}
 }
+async function previewSavedImport(){
+  const documentId=$('importSavedFile').value;
+  if(!documentId){$('importMessage').textContent='Выберите сохранённый прайс или загрузите новый файл.';return;}
+  const file=importsState.files.find(f=>f.id===documentId&&f.company===$('importCompany').value);
+  if(!file)return;
+  resetImportPreview();const seq=importsState.seq;importBusy(true);
+  if(importsState.routeFiles.some(f=>f.id===documentId)){
+    importsState.applying=true;
+    try{
+      const data=await getJSON('/api/route-documents/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...importsState.route,company:file.company,document_id:documentId})});
+      importApplyNotice(`✓ Цены применены: ${data.applied_prices} строк. Файл «${file.original_filename}» остаётся в библиотеке.`);
+      $('importPreview').hidden=false;$('importRows').textContent='';$('importEvidence').textContent='';$('importWarnings').textContent='';$('importMissing').textContent='';
+      $('importRows').closest('.table-wrap').hidden=true;
+      $('importConfirmed').parentElement.hidden=true;
+      $('importDoneButton').hidden=false;$('importApplyButton').textContent='Цены применены';
+      $('importMessage').textContent='Сохранённые цены этого маршрута применены без повторного распознавания.';
+      state.calculationCompanies.add(file.company);state.liveOnly=false;state.includeImports=true;$('liveModeSelect').value='all';
+      if(typeof appliedFileNotice==='function')appliedFileNotice(data);
+      await loadOptions(data.origin,data.destination);await compare();
+      if(typeof refreshBulkAfterDocuments==='function')await refreshBulkAfterDocuments();
+      toast('Цены из библиотеки применены');
+    }catch(error){importApplyNotice('Не удалось применить файл: '+error.message,true);$('importPreview').hidden=false;}
+    finally{importsState.applying=false;importBusy(false);}
+    return;
+  }
+  const jobId=Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
+  importsState.jobId=jobId;
+  rememberImportJob({job_id:jobId,...importsState.route,company:file.company,filename:file.original_filename,document_id:documentId});
+  $('importMessage').textContent='Извлекаю цены из сохранённого оригинала… Повторная загрузка файла не нужна.';
+  try{
+    const job=await getJSON('/api/price-documents/'+encodeURIComponent(documentId)+'/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...importsState.route,job_id:jobId}),timeout:30000});
+    if(seq!==importsState.seq||!$('importDialog').open)return;
+    await monitorImportJob(jobId,seq,job);
+  }catch(error){
+    if(seq!==importsState.seq||!$('importDialog').open)return;
+    if(transientImportError(error))await monitorImportJob(jobId,seq,null,true);
+    else{forgetImportJob(jobId);importsState.jobId=null;$('importMessage').textContent=error.message;}
+  }finally{if(seq===importsState.seq)importBusy(false);}
+}
 async function applyImport(){
   if(importsState.busy||!importsState.token||!$('importConfirmed').checked)return;
-  importBusy(true);importApplyNotice('Применяю цены…');$('importApplyButton').textContent='Применяю…';
+  importsState.applying=true;importBusy(true);importApplyNotice('Применяю цены…');$('importApplyButton').textContent='Применяю…';
   let committed=false;
   try{
     const data=await getJSON('/api/import/commit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:importsState.token})});
@@ -649,6 +744,7 @@ async function applyImport(){
     importsState.token=null;importsState.companies[data.company]=data.meta;showCurrentImport();
     $('importMessage').textContent=`✓ Файл «${data.meta.original_filename}» применён. Сохранено ${data.rows} цен.`;
     importApplyNotice($('importMessage').textContent);$('importApplyButton').textContent='Цены применены';$('importDoneButton').hidden=false;toast('Цены из файла применены');
+    $('importConfirmed').parentElement.hidden=true;
     if(typeof appliedFileNotice==='function')appliedFileNotice({company:data.company,origin:data.origin,destination:data.destination,filename:data.meta.original_filename,applied_prices:data.rows,document_id:data.meta.document_id});
     state.calculationCompanies.add(data.company);
     // Make the explicitly applied document visible immediately, including export.
@@ -656,7 +752,7 @@ async function applyImport(){
     await loadOptions(data.origin,data.destination);await compare();
     if(typeof refreshDocuments==='function'){await refreshDocuments();await refreshBulkAfterDocuments();}
   }catch(e){if(committed){toast('Цены сохранены. Не удалось обновить экран: '+e.message);}else{importApplyNotice('Не удалось применить цены: '+e.message,true);$('importMessage').textContent=e.message;$('importApplyButton').textContent='Применить цены из файла';}}
-  finally{importBusy(false);}
+  finally{importsState.applying=false;importBusy(false);}
 }
 $('importDoneButton').addEventListener('click',closeImport);
 async function removeImport(){
@@ -672,8 +768,11 @@ async function removeImport(){
 }
 $('importButton').addEventListener('click',openImport);
 $('closeImportButton').addEventListener('click',closeImport);
-$('importDialog').addEventListener('cancel',()=>resetImportPreview());
-$('importCompany').addEventListener('change',()=>{resetImportPreview();$('importFile').value='';showCurrentImport();});
+$('importDialog').addEventListener('cancel',event=>{if(importsState.applying)event.preventDefault();else resetImportPreview();});
+$('importCompany').addEventListener('change',()=>{resetImportPreview();$('importFile').value='';showCurrentImport();renderSavedImportFiles();});
+$('importSavedFile').addEventListener('change',()=>{resetImportPreview();setImportMode('library');});
+$('importLibraryMode').addEventListener('click',()=>{resetImportPreview();setImportMode('library');});
+$('importUploadMode').addEventListener('click',()=>{resetImportPreview();setImportMode('upload');});
 $('importFile').addEventListener('change',resetImportPreview);
 $('importConfirmed').addEventListener('change',()=>importBusy(importsState.busy));
 $('importPreviewButton').addEventListener('click',previewImport);

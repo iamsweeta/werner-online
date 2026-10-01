@@ -20,6 +20,7 @@ async function scenario(mode){
    else if(u.pathname==='/api/profile-matrix')data={profiles:[{profile,items:[item]}]};
    else if(u.pathname==='/api/active-collect')data={status:'idle'};
    else if(u.pathname==='/api/imports')data={companies:{}};
+  else if(u.pathname==='/api/price-documents'||u.pathname==='/api/route-documents')data={files:[]};
    else if(u.pathname==='/api/import/jobs'&&opts.method==='POST'){
     posts++;jobId=opts.body.get('job_id');assert.match(jobId,/^[a-f0-9]{32}$/);assert.equal(opts.body.get('origin'),'Казань');assert.equal(opts.body.get('destination'),'Уфа');
     if(mode==='post502')return {ok:false,status:502,json:async()=>{throw Error('HTML from proxy');}};
@@ -34,7 +35,7 @@ async function scenario(mode){
   w.eval(script);return {dom,w,$};
  }
  let current=make();await until(()=>current.$('comparisonTable').textContent.includes('Werner'));
- current.$('importButton').click();await until(()=>current.$('importDialog').open);
+ current.$('importButton').click();await until(()=>current.$('importDialog').open&&!current.$('importUploadPanel').hidden);
  Object.defineProperty(current.$('importFile'),'files',{configurable:true,value:[new current.w.File(['scan'],'scan.pdf')]});
  current.$('importPreviewButton').click();await until(()=>polls>=2);
  assert.match(current.$('importMessage').textContent,/Прошло 1 мин 10 сек/);assert.match(current.$('importMessage').textContent,/этап выполняется 35 сек/);assert.match(current.$('importMessage').textContent,/120 сек/);

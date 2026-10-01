@@ -22,6 +22,7 @@ async function until(fn){for(let i=0;i<250;i++){if(fn())return;await pause(5)}th
   else if(u.pathname==='/api/profile-matrix')data={profiles:[{profile:profiles[0],items:[item()]}]};
   else if(u.pathname==='/api/active-collect')data={status:'idle'};
   else if(u.pathname==='/api/imports')data={companies:{}};
+  else if(u.pathname==='/api/price-documents'||u.pathname==='/api/route-documents')data={files:[]};
   else if(u.pathname==='/api/import/jobs'){
    previewCount++;assert.equal(request.body.get('company'),'Werner');assert.equal(request.body.get('origin'),'Казань');assert.equal(request.body.get('destination'),'Екатеринбург');
    data={token:'token',company:'Werner',origin:'Казань',destination:'Екатеринбург',rows:[{profile:profiles[0],price:1234}],missing_profiles:[],warnings:['Актуальность проверьте по оригиналу'],meta:{parser:'Тестовая таблица'}};data={job_id:'job',status:'ready',preview:data};
@@ -31,7 +32,7 @@ async function until(fn){for(let i=0;i<250;i++){if(fn())return;await pause(5)}th
   return {ok:true,json:async()=>data};
  };
  w.eval(script);await until(()=>$('originSelect').value==='Казань'&&$('comparisonTable').textContent.includes('Werner'));
- $('importButton').click();await until(()=>$('importDialog').open);
+ $('importButton').click();await until(()=>$('importDialog').open&&!$('importUploadPanel').hidden);
  Object.defineProperty($('importFile'),'files',{configurable:true,value:[new w.File(['test'],'Прайс.xlsx')]});
  $('importPreviewButton').click();await until(()=>!$('importPreview').hidden);
  assert.equal(previewCount,1);assert.equal(applied,false);assert.equal($('importApplyButton').disabled,true);
